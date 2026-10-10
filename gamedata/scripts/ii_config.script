@@ -342,15 +342,45 @@ MCM_PAGES = {
 	"colors",
 }
 
+-- Every option's MCM storage path, keyed by option id, from the tree MCM builds the menu from
+-- (ii_mcm.on_mcm_load). nil if that tree can't be built. Rebuilt on every read, which only
+-- runs on load and option change.
+local function mcm_paths()
+	local paths = {}
+	local function walk(node, prefix)
+		for _, child in ipairs(node.gr) do
+			local path = prefix .. "/" .. child.id
+			if child.sh then
+				for _, opt in ipairs(child.gr) do
+					paths[opt.id] = path .. "/" .. opt.id
+				end
+			else
+				walk(child, path)
+			end
+		end
+	end
+	local ok = pcall(function()
+		local tree = ii_mcm.on_mcm_load()
+		walk(tree, tree.id)
+	end)
+	return ok and paths or nil
+end
+
 function read(C, COLOR_DEFS)
+	-- The menu is split into per-section leaf PAGES (ii_mcm.script), so each option stores
+	-- under "ii/<page>/<key>". Ask MCM for that one path: get() returns nil for a path its
+	-- menu lacks, but also logs "!MCM given bad path" for it, and trying every page per key
+	-- logged thousands of lines per load. Without the tree, fall back to trying each page and
+	-- taking the first hit (every option id is unique and lives on exactly one page).
+	local paths = ui_mcm and ui_mcm.get and mcm_paths()
 	for key, default in pairs(DEFAULTS) do
 		local v = default
-		if ui_mcm and ui_mcm.get then
-			-- The menu is split into per-section leaf PAGES (ii_mcm.script), so each option
-			-- stores under "ii/<page>/<key>". Rather than track which page owns which key,
-			-- try each page and take the first hit: every option id is unique and lives on
-			-- exactly one page, and get() returns nil for a path with no option there. Only
-			-- runs on load / option-change, so the extra lookups cost nothing per frame.
+		if paths then
+			local got = paths[key] and ui_mcm.get(paths[key])
+			if got ~= nil then
+				v = got
+			end
+		elseif ui_mcm and ui_mcm.get then
 			for _, pg in ipairs(MCM_PAGES) do
 				local got = ui_mcm.get("ii/" .. pg .. "/" .. key)
 				if got ~= nil then
