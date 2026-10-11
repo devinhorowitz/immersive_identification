@@ -216,9 +216,10 @@ end
 -- Config
 -- --------------------------------------------------------------------------
 -- Every MCM leaf-page id in ii_mcm.script, in tab order. read_config tries each to
--- resolve an option's storage path ("ii/<page>/<key>"). MUST list every page ii_mcm
--- defines -- a page missing here means that page's options silently never load. Global
--- (not local) so it costs no top-level-local slot (Lua 5.1's 200-per-chunk limit).
+-- resolve an option's storage path ("ii/<page>/<key>") when it can't build the menu tree
+-- (ii_config.read). MUST list every page ii_mcm defines -- in that case a page missing
+-- here means that page's options silently never load. Global (not local) so it costs no
+-- top-level-local slot (Lua 5.1's 200-per-chunk limit).
 MCM_PAGES = ii_config.MCM_PAGES
 
 -- Optional external TIER SYSTEM (st-wearable-devices compatibility). A compat addon

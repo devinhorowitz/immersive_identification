@@ -771,9 +771,11 @@ each rendering as its own tab (tab label = `ui_mcm_menu_<page_id>`): **general**
 (the distance/rank/target-visibility/familiarity/perception modifier sub-headers), **audio**, **debug**, and
 **colors** (the per-faction/rank/relation RGB overrides, generated from
 `ii_identify.COLOR_DEFS`). Because an option's MCM storage path is
-`ii/<page>/<option_id>`, options are NOT all under `ii/main/*` — `read_config` resolves
-each key by trying every page in `MCM_PAGES` (first non-nil wins), and the preset LTX
-paths use the per-page ids. Three MCM traps encoded in comments:
+`ii/<page>/<option_id>`, options are NOT all under `ii/main/*` — `read_config` looks up
+each key's path in this tree and asks MCM for that path alone (MCM logs every path it
+doesn't know); only if the tree can't be built does it try every page in `MCM_PAGES`
+(first non-nil wins). The preset LTX paths use the per-page ids. Three MCM traps
+encoded in comments:
 the top node must **not** carry `sh` (only the leaf page does); an option's
 **`hint` is the BARE base id** (`"ii_<id>"`) — MCM resolves its caption from
 `ui_mcm_<hint>` and its **hover tooltip** from `ui_mcm_<hint>_desc`, so passing a

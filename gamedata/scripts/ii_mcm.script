@@ -101,8 +101,8 @@ function on_mcm_load()
 	-- MCM's tree walker crashes on "attempt to get length of field 'gr'"). Each SECTION
 	-- below is now its own leaf page -> its own tab (tab label = ui_mcm_menu_<page id>).
 	-- Because an option's MCM storage path is "<top>/<page>/<id>", every option lives
-	-- under "ii/<section>/<id>" now (NOT "ii/main/..."): read_config resolves that by
-	-- trying each page (see MCM_PAGES there), and presets_ii.ltx paths match these ids.
+	-- under "ii/<section>/<id>" now (NOT "ii/main/..."): read_config finds each option's
+	-- path by walking this tree (ii_config.read), and presets_ii.ltx paths match these ids.
 	local function page(id, gr, precondition)
 		return { id = id, sh = true, gr = gr, precondition = precondition }
 	end
