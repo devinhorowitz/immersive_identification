@@ -1,7 +1,7 @@
 <fomod>
 	<Name>Immersive Identification</Name>
 	<Author>Immersive Identification</Author>
-	<Version>4.4.0</Version>
+	<Version>4.4.1</Version>
 	<Website>https://github.com/dxshie/immersive_identification</Website>
 	<Description>Aim at an NPC or creature and press a bindable key to identify their faction as a floating, world-anchored tag next to their body instead of a HUD element.</Description>
 	<Groups>

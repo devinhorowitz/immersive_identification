@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.4.1
+
+- Stop the "MCM given bad path" lines on every load by @devinhorowitz in https://github.com/dxshie/immersive_identification/pull/5
+
 ## 4.4.0
 
 - Add opacity sliders for UI elements
