@@ -1,188 +1,185 @@
--- Promin identification NOTIFICATIONS. When a target is identified while the player is on
--- the BIOMONITOR or NAVIGATION Promin page (i.e. NOT the IDENTIFICATION page, where it's
--- already shown), a card pops up in the bottom-right and stacks upward as more come in.
--- Each card: faction emblem (left circle), name + distance (middle), rank-as-level (right).
+-- Promin identification cards. When a target is identified while the Promin shows another
+-- page (the IDENTIFICATION page shows the result itself), a card pops up bottom-right and
+-- stacks upward. Each card is a WD panel box: the faction emblem, name and distance, then
+-- faction and rank. It is built on a WD panel kit, so it follows WD's palette and brightness.
 --
--- Rendered as children of the Promin window (created AFTER the pages by the d_promin_ui
--- override, so they draw ON TOP of the active page). Text via the glyph compositor; the card
--- art is ii_wd_notif_card. All coordinates are design px in the shared 1100x600 space.
+-- Every card widget hangs off one root static attached to the Promin window, and children
+-- draw in attach order. A page WD builds later would draw over the cards, so ii_wd_promin
+-- destroys the stack and builds a new one whenever the window gains a page.
 
-local binder = wd_screen.new_binder(d_promin_config.SCREEN_SHADER)
-local scratch = vector2()
+local px = d_promin_config.get_px()
+local set_shown = wd_screen.set_shown
+local place_widget = wd_screen.place_widget
+local get_upper = wd_text.get_upper
 local min, max = math.min, math.max
 
-local NOTIF_MAX = 4 -- most cards stacked at once
-local TTL_MS = 6000 -- how long a card stays before fading out
--- Scale 1 keeps the established enlarged layout; wd_notify_scale multiplies the whole card.
-local CARD = { w = 363, h = 73 } -- card size on screen (design px); art is 304x64
-local RIGHT_X, BOTTOM_Y, GAP = 986, 566, 9 -- cards' right edge, bottom card's bottom, stack gap
+local NOTIF_MAX = 4
+local TTL_MS = 6000
+local SEPARATOR = " \183 "
+local DIST_TEXT = "%d M"
+local UNKNOWN = "UNKNOWN"
 
-local COL_NAME = { 210, 235, 222 }
-local COL_DIST = { 150, 200, 175 }
-local COL_RANK = { 225, 205, 120 }
+-- Design px at wd_notify_scale 1. `right` lines the cards up with WD's sidebar edge.
+LAYOUTS = {
+	[d_promin_config.DEFAULT_THEME] = {
+		right = 1025,
+		bottom = 565,
+		w = 300,
+		h = 54,
+		gap = 8,
+		inset = 10,
+		emblem = 30,
+		name_y = 8,
+		name_h = 18,
+		sub_h = 15,
+		line_gap = 4,
+		dist_w = 64,
+	},
+	[d_promin_config.LARGE_THEME] = {
+		right = 1075,
+		bottom = 565,
+		w = 340,
+		h = 66,
+		gap = 8,
+		inset = 10,
+		emblem = 38,
+		name_y = 9,
+		name_h = 23,
+		sub_h = 19,
+		line_gap = 5,
+		dist_w = 84,
+	},
+}
 
--- Card-local content anchors, as fractions of the 304x64 art (from measuring the card):
--- circle centre (29,32), name/distance right of it, rank slot centre (264,32).
-local ICON = { cx = 29 / 304, cy = 32 / 64, size = 43 }
-local NAME = { x = 57 / 304, y = 7 / 64, gw = 14, gh = 19, adv = 14, max = 15 }
-local DIST = { x = 57 / 304, y = 34 / 64, gw = 11, gh = 15, adv = 11, max = 12 }
-local RANK = { cx = 264 / 304, cy = 30 / 64, gw = 13, gh = 16, adv = 13 } -- "Rank N", centred
-
--- nav = "map_small"; biomonitor = "main" (map module present) or "health" (no map module).
-local function notif_page(id)
-	return id == "map_small" or id == "main" or id == "health"
-end
-
-local function notification_scale()
+function get_scale()
 	local scale = ii_identify and ii_identify.get_wd_notify_scale and ii_identify.get_wd_notify_scale() or 1
 	return max(0.5, min(2, scale or 1))
 end
 
-function build(ctx)
-	local px = d_promin_health_ui.get_px()
-	local mgr = { slots = {}, last_id = nil, inited = false, scale = notification_scale() }
-
-	local function layout_slot(s)
-		local scale = mgr.scale
-		local card_w, card_h, gap = CARD.w * scale, CARD.h * scale, GAP * scale
-		local cx = RIGHT_X - card_w
-		local cy = BOTTOM_Y - card_h - s.index * (card_h + gap)
-
-		s.bg:SetWndPos(scratch:set(px.x(cx), px.y(cy)))
-		s.bg:SetWndSize(scratch:set(px.w(card_w), px.h(card_h)))
-
-		local icon_size = ICON.size * scale
-		s.icon:SetWndPos(
-			scratch:set(px.x(cx + ICON.cx * card_w - icon_size / 2), px.y(cy + ICON.cy * card_h - icon_size / 2))
-		)
-		s.icon:SetWndSize(scratch:set(px.w(icon_size), px.h(icon_size)))
-
-		ii_wd_text.layout_field(
-			s.name,
-			px,
-			cx + NAME.x * card_w,
-			cy + NAME.y * card_h,
-			NAME.gw * scale,
-			NAME.gh * scale,
-			NAME.adv * scale
-		)
-		ii_wd_text.layout_field(
-			s.dist,
-			px,
-			cx + DIST.x * card_w,
-			cy + DIST.y * card_h,
-			DIST.gw * scale,
-			DIST.gh * scale,
-			DIST.adv * scale
-		)
-		local rank_advance = RANK.adv * scale
-		ii_wd_text.layout_field(
-			s.rank,
-			px,
-			cx + RANK.cx * card_w - 3 * rank_advance,
-			cy + RANK.cy * card_h - RANK.gh * scale / 2,
-			RANK.gw * scale,
-			RANK.gh * scale,
-			rank_advance
-		)
+local function new_slot(kit, layout, scale, index)
+	local s = function(v)
+		return v * scale
 	end
+	local w, h = s(layout.w), s(layout.h)
+	local left = layout.right - w
+	local top = layout.bottom - h - index * (h + s(layout.gap))
+	local inset, emblem = s(layout.inset), s(layout.emblem)
+	local name_h, sub_h = s(layout.name_h), s(layout.sub_h)
+	local text_x = left + inset + emblem + inset
+	local dist_w = s(layout.dist_w)
+	local name_w = layout.right - inset - dist_w - text_x
+	local name_y = top + s(layout.name_y)
+	local slot = { active = false, expiry = 0, name_w = name_w, sub_w = layout.right - inset - text_x }
 
-	for i = 0, NOTIF_MAX - 1 do
-		local s = { active = false, expiry = 0, icon_tex = nil, index = i }
+	slot.box = kit.new_box()
+	slot.box.place(px.x(left), px.y(top), px.w(w), px.h(h))
+	slot.emblem = kit.new_image(wd_screen.FILL_ID, "text")
+	place_widget(slot.emblem.widget, px.x(left + inset), px.y(top + (h - emblem) / 2), px.w(emblem), px.h(emblem))
+	slot.name = kit.new_text({ chars = 22, width = px.w(name_w), height = px.h(name_h) })
+	slot.name.place(px.x(text_x), px.y(name_y))
+	slot.dist = kit.new_text({ chars = 7, width = px.w(dist_w), height = px.h(name_h), align = "right" })
+	slot.dist.place(px.x(layout.right - inset - dist_w), px.y(name_y))
+	slot.sub = kit.new_text({ chars = 30, width = px.w(slot.sub_w), height = px.h(sub_h) })
+	slot.sub.place(px.x(text_x), px.y(name_y + name_h + s(layout.line_gap)))
+	slot.name_h, slot.sub_h = name_h, sub_h
+	return slot
+end
 
-		s.bg = ctx.init_ii("ii_wd_glyph")
-		binder.set(s.bg, "ii_wd_notif_card")
-		s.bg:Show(false)
+local function hide_slot(slot)
+	slot.active = false
+	slot.box.set_visible(false)
+	set_shown(slot.emblem, false)
+	slot.name.set_visible(false)
+	slot.dist.set_visible(false)
+	slot.sub.set_visible(false)
+end
 
-		s.icon = ctx.init_ii("ii_wd_glyph")
-		s.icon:Show(false)
-
-		s.name = ii_wd_text.new_field(px, ctx.init_ii, "ii_wd_glyph", NAME.max, 0, 0, 1, 1, 1, COL_NAME)
-		s.dist = ii_wd_text.new_field(px, ctx.init_ii, "ii_wd_glyph", DIST.max, 0, 0, 1, 1, 1, COL_DIST)
-		s.rank = ii_wd_text.new_field(px, ctx.init_ii, "ii_wd_glyph", 8, 0, 0, 1, 1, 1, COL_RANK)
-		layout_slot(s)
-
-		mgr.slots[i + 1] = s
+local function sub_line(last)
+	local faction = last.faction and get_upper(last.faction)
+	local rank = last.rank and get_upper(last.rank)
+	if faction and rank then
+		return faction .. SEPARATOR .. rank
 	end
+	return faction or rank or ""
+end
 
-	local function render_card(s, last, alpha)
-		s.bg:SetTextureColor(GetARGB(alpha, 255, 255, 255))
-		s.bg:Show(true)
-		if last.icon and last.icon ~= "" then
-			s.icon_tex = binder.bind(s.icon, last.icon, s.icon_tex)
-			s.icon:SetTextureColor(GetARGB(alpha, 255, 255, 255))
-			s.icon:Show(true)
-		else
-			s.icon:Show(false)
-		end
-		ii_wd_text.set_text(s.name, (last.name and last.name ~= "") and last.name or "UNKNOWN", alpha)
-		ii_wd_text.set_text(s.dist, last.dist and string.format("%d m", last.dist) or "", alpha)
-		ii_wd_text.set_text(s.rank, last.rank_level and ("Rank " .. last.rank_level) or "", alpha)
+local function show_slot(kit, slot, last)
+	slot.box.set_visible(true)
+	local emblem = ii_wd_promin.emblem_id(last.comm)
+	if emblem then
+		kit.set_image(slot.emblem, emblem)
 	end
+	set_shown(slot.emblem, emblem ~= nil)
+	local name = (last.name and last.name ~= "") and get_upper(last.name) or UNKNOWN
+	slot.name.show(kit.fit(name, px.w(slot.name_w), px.h(slot.name_h)), "text")
+	slot.dist.show(last.dist and string.format(DIST_TEXT, last.dist) or "", "meta")
+	slot.sub.show(kit.fit(sub_line(last), px.w(slot.sub_w), px.h(slot.sub_h)), "meta")
+end
 
-	local function hide_slot(s)
-		s.active = false
-		s.bg:Show(false)
-		s.icon:Show(false)
-		ii_wd_text.hide_field(s.name)
-		ii_wd_text.hide_field(s.dist)
-		ii_wd_text.hide_field(s.rank)
+-- One card stack for the window `wnd`, laid out for `theme` at `scale` (fixed per stack:
+-- ii_wd_promin builds a new one when either changes, or when WD adds a page).
+function build(wnd, theme, scale)
+	local layout = LAYOUTS[theme] or LAYOUTS[d_promin_config.DEFAULT_THEME]
+	local root = CUIStatic()
+	root:SetAutoDelete(true)
+	wnd:AttachChild(root)
+	local kit = d_promin_chrome_ui.new_kit(root)
+	if not kit then
+		return nil
+	end
+	local mgr = { root = root, theme = theme, scale = scale, slots = {}, last_id = nil, inited = false }
+	for index = 1, NOTIF_MAX do
+		mgr.slots[index] = new_slot(kit, layout, scale, index - 1)
+		hide_slot(mgr.slots[index])
 	end
 
 	local function push(last)
 		-- Fill the lowest free slot; if all are full, reuse the one expiring soonest.
-		local target, best = nil, math.huge
-		for i = 1, NOTIF_MAX do
-			local s = mgr.slots[i]
-			if not s.active then
-				target = s
+		local target, soonest = nil, math.huge
+		for _, slot in ipairs(mgr.slots) do
+			if not slot.active then
+				target = slot
 				break
 			end
-			if s.expiry < best then
-				best, target = s.expiry, s
+			if slot.expiry < soonest then
+				soonest, target = slot.expiry, slot
 			end
 		end
 		target.active = true
 		target.expiry = time_global() + TTL_MS
-		render_card(target, last, d_promin_health_ui.get_ui_alpha())
+		show_slot(kit, target, last)
 	end
 
-	function mgr.update(active_page_id, powered)
-		local scale = notification_scale()
-		if scale ~= mgr.scale then
-			mgr.scale = scale
-			for i = 1, NOTIF_MAX do
-				layout_slot(mgr.slots[i])
-			end
-		end
-		local show_here = powered and notif_page(active_page_id)
-		-- Detect a NEW identification (id changed) without allocating each frame.
-		local cur = ii_identify and ii_identify.get_last_identified_id and ii_identify.get_last_identified_id() or nil
+	function mgr.update(show_here)
+		local current = ii_identify and ii_identify.get_last_identified_id and ii_identify.get_last_identified_id()
 		if not mgr.inited then
 			mgr.inited = true
-			mgr.last_id = cur -- don't fire a card for whatever was identified before we started
-		elseif cur ~= mgr.last_id then
-			mgr.last_id = cur
-			if cur and show_here then
+			mgr.last_id = current -- no card for whatever was identified before the stack existed
+		elseif current ~= mgr.last_id then
+			mgr.last_id = current
+			if current and show_here then
 				push(ii_identify.get_last_identified())
 			end
 		end
-		-- Expire cards; hide everything while off the notification pages / unpowered.
 		local now = time_global()
-		for i = 1, NOTIF_MAX do
-			local s = mgr.slots[i]
-			if s.active and (not show_here or now >= s.expiry) then
-				hide_slot(s)
+		for _, slot in ipairs(mgr.slots) do
+			if slot.active and (not show_here or now >= slot.expiry) then
+				hide_slot(slot)
 			end
 		end
 	end
 
 	function mgr.hide_all()
-		for i = 1, NOTIF_MAX do
-			hide_slot(mgr.slots[i])
+		for _, slot in ipairs(mgr.slots) do
+			hide_slot(slot)
 		end
 	end
 
-	mgr.hide_all()
+	-- Detaching an auto-delete window frees it with every widget under it.
+	function mgr.destroy()
+		wnd:DetachChild(root)
+	end
+
+	mgr.repaint = kit.repaint
 	return mgr
 end

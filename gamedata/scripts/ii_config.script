@@ -188,7 +188,7 @@ DEFAULTS = {
 	-- get_wd_tier_cfg below); completely inert otherwise. Retune every default tier here.
 	wd_ignore = false, -- master toggle: ignore the WD compat component entirely (identify as if WD isn't installed)
 	wd_require_kit = true, -- block identification entirely unless the full scanner kit is worn/assembled
-	wd_notify_scale = 1.0, -- Promin BIOMONITOR/NAVIGATION identification notification size multiplier
+	wd_notify_scale = 1.0, -- size multiplier for the Promin's identification cards
 	wd_proc_t1 = 1.5, -- process-module tier 1/2/3 base scan time (seconds)
 	wd_proc_t2 = 1.0,
 	wd_proc_t3 = 0.5,

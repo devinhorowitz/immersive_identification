@@ -9,13 +9,14 @@ a worn scanner, with a tier progression and a dedicated Promin readout screen.
 
 ## 1. Two identification channels
 
-You build one of two channels; they are **mutually exclusive** (the antenna and the OSD
-scanner share the Promin's `conn` bay, so only one can be installed at a time — that shared
-bay *is* the AR↔OSD switch).
+You build either channel, or both: they are **independent** (the antenna and the OSD scanner
+sit in separate Promin bays). With both ready, the better scanner tier sets range and
+capability, and the on-entity UI shows as usual; it is suppressed only while the OSD channel is
+the only one ready.
 
 | | **AR channel** | **OSD channel** |
 |---|---|---|
-| Where results show | **On entities** — the usual floating tags / bodycam overlays | **Only on the Promin IDENTIFICATION page** — no on-entity UI at all |
+| Where results show | **On entities** — the usual floating tags / bodycam overlays | **Only on the Promin** — the IDENTIFICATION page and its pop-up cards; no on-entity UI at all |
 | Scanner form | **AR Scanner** — a worn bracer device | **OSD Scanner Module** — a Promin module |
 | Requires | antenna + process module (Promin) **+ worn AR scanner + bracer** | OSD scanner module + process module **only** (no antenna, no bracer, no worn device) |
 | Promin worn & powered | yes | yes |
@@ -34,8 +35,8 @@ install, returned on removal):
 | Item | Bay | Cost |
 |---|---|---|
 | Promin Antenna Module | `conn` | 4 500 |
-| Promin Process Module — Tier 1 / 2 / 3 | `side` | 5 000 / 9 000 / 16 000 |
-| OSD Scanner Module — Tier 1 / 2 / 3 | `conn` (shares w/ antenna) | 7 000 / 13 000 / 22 000 |
+| Promin Process Module — Tier 1 / 2 / 3 | `ii_proc` (added) | 5 000 / 9 000 / 16 000 |
+| OSD Scanner Module — Tier 1 / 2 / 3 | `ii_osd` (added) | 7 000 / 13 000 / 22 000 |
 
 **Worn device** (mounts on the bracer via its own logical slot):
 
@@ -43,8 +44,8 @@ install, returned on removal):
 |---|---|
 | AR Scanner — Tier 1 / 2 / 3 | 7 000 / 13 000 / 22 000 |
 
-Only one module fits per bay: installing a different process tier (or swapping antenna ↔
-OSD scanner) **evicts** the current occupant and returns it to your pack.
+Only one module fits per bay: installing a different process or OSD scanner tier **swaps out**
+the current one and returns it to your pack.
 
 ---
 
@@ -78,20 +79,21 @@ normal identification and let the kit only *enhance* it.
 
 ## 4. Promin IDENTIFICATION screen
 
-Installing an OSD scanner module adds a third page to the Promin screen — **IDENTIFICATION**
-— cycled with BIOMONITOR / NAVIGATION (double-tap the Promin key). It mirrors the NAVIGATION
-layout: the biomonitor stays on the left, and the **last-identified target** fills the right
-panel (where the map normally is):
+Installing an OSD scanner module adds an **IDENTIFICATION** page to the Promin's number keys,
+after WD's own pages: key 3, or 4 with WD's map module (WD's header draws keys 1-3 only; key 4
+still selects the page). It is built like WD 0.9's own pages, with WD's frame, font, colours,
+brightness and both themes, and shows the **last-identified target**:
 
-- **Portrait** of the target (its `character_icon`)
-- **Name, Faction, Rank, Position, Distance, Weapon & caliber**
-- Fields the current process tier hasn't unlocked show `---` (same gating as the on-entity
-  tags); monsters have no portrait, so it's hidden for them.
+- **Portrait** of the target (its `character_icon`; monsters have none)
+- **Name**, **faction** with WD's emblem, and **rank**; faction and rank stay hidden until the
+  process tier unlocks them (same gating as the on-entity tags)
+- **Distance, position and weapon** (`-` when locked or unknown), and a **scan bar** while a
+  scan runs
+- A sidebar with the kit: process, OSD scanner, antenna and AR scanner tiers, and the
+  identify range
 
-Because the Promin CRT screen has no font (WD renders numbers as pre-baked digit textures),
-the component ships a **monospace glyph atlas** + a text compositor that draws arbitrary
-strings by binding per-character glyph textures onto slot widgets — the same technique WD
-uses for its clock, extended to the full alphabet.
+On WD's other pages an identification pops up a card instead (emblem, name, distance, faction
+and rank).
 
 ---
 
@@ -100,7 +102,7 @@ uses for its clock, extended to the full alphabet.
 Every tier value is tunable on the Wearable Devices page of the Immersive Identification MCM:
 
 - **Require Scanner kit to identify** (master gate)
-- **Identification notification scale** — resize Promin BIOMONITOR/NAVIGATION popups live
+- **Identification notification scale** — resize the Promin's identification cards live
 - **Process scan times** — Tier 1 / 2 / 3
 - **Process penalty strengths** — Tier 1 / 2 / 3 (defaults 100% / 75% / 50%)
 - **Scanner ranges** — Tier 1 / 2 / 3
@@ -147,12 +149,16 @@ duplicate bracer on the arm); it's a logical device — worn state + tier only.
   throws into the per-frame identify path.
 - **Tier seam:** drives the base mod through a single `ii_identify.tier_provider` hook,
   snapshotted once per frame; the driver's WD-state read is cached (~250 ms).
-- **No new Promin bays / no customize-UI crash:** repurposes WD's two functionally-empty
-  bays (`conn`, `side`) instead of adding bays (a 4th bay is a fatal `module_open_4` XML
-  crash). The Promin keeps exactly three cells.
-- **Ident page:** a VFS override of WD's `d_promin_ui.script` (verbatim copy + two marked
-  `II-COMPAT` additions), since WD's page-builder table has no registration seam. Re-sync if
-  WD updates that file.
+- **Bays (WD 0.9):** the antenna uses WD's empty `conn` bay; the OSD scanner and process
+  module get bays of their own (`ii_osd`, `ii_proc`), since WD 0.9's `side` bay holds its
+  environmental modules. WD's modules are untouched. The extra bays come with customize-screen
+  cells 4 and 5 in our `ui_wd_customize.xml` override (a missing cell is a fatal
+  `module_open_4` XML crash).
+- **Ident page and cards without replacing WD files:** `ii_wd_promin` adds the page to WD's
+  file-local page table through `UIPromin.ensure_page`'s upvalues and drives the cards from
+  WD's own `UIPromin.Update`; both are built from WD's chrome and panel kit, so they follow
+  WD's font, palette, brightness and themes. If WD reshapes that code, they switch off with a
+  log line instead of crashing.
 
 ---
 
@@ -175,9 +181,8 @@ duplicate bracer on the arm); it's a logical device — worn state + tier only.
 
 ## Status / caveats
 
-The tier **logic** is complete and statically validated (Lua 5.1 `luac`, StyLua, the language
-server, and XML all pass). The WD **device/slot integration** could not be exercised in-game
-during development — it follows WD's own patterns faithfully but may need iteration, and the
-Promin ident page's on-screen layout constants will likely need in-game tuning. WD is coupled
-by section/table names; a WD update to its device/slot/module internals may require matching
+Checked in game with WD 0.9.2 on a save carrying the full kit: modules survive loading, the
+customize screen shows cells 4 and 5, the IDENTIFICATION page renders in both WD themes, and an
+identification drives the scan bar, the readout and a notification card. WD is coupled by
+section/table names; a WD update to its device/slot/module/UI internals may require matching
 changes here.

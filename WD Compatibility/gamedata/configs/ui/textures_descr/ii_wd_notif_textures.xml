@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="windows-1251"?>
-<w>
-	<!-- Notification pop-up card (304x64) shown on the Promin BIOMONITOR / NAVIGATION pages
-	     when a target is identified: faction logo (left circle), name + distance (middle),
-	     rank-as-level (right slot). Author-provided art. -->
-	<file name="ii_wd\ui\ii_wd_notif_card">
-		<texture id="ii_wd_notif_card" x="0" y="0" width="304" height="64" />
-	</file>
-</w>

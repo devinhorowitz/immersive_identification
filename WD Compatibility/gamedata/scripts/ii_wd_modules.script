@@ -1,49 +1,49 @@
 -- Register the identification modules with WD's Promin so they show + install in the
--- bracer customize UI, WITHOUT adding new Promin bays (a fourth bay crashes WD's customize
--- screen, which builds a fixed cell per bay and only ships XML for three).
+-- bracer customize UI.
 --
--- We REPURPOSE WD's two functionally-empty bays (its `conn`/`side` modules do nothing --
--- only `map` has effects), replacing those two MODULES entries with ours:
---   conn bay: the ANTENNA (AR path) OR an OSD SCANNER tier (OSD path) -- mutually exclusive
---             since they share the bay; that IS the AR-vs-OSD channel switch.
---   side bay: the PROCESS module (3 tiers share it -> one at a time).
--- The Promin keeps exactly three bays/cells, so nothing in WD's UI changes.
+-- Bays (WD 0.9): WD's `conn` bay is still a do-nothing placeholder, so the ANTENNA lives
+-- there. WD's `side` bay now holds its environmental modules, so the PROCESS and OSD SCANNER
+-- modules get bays of their own (ii_proc, ii_osd), appended to WD's three. WD's MODULES are
+-- left as they are. WD's customize screen builds one cell per bay, so the two extra bays need
+-- the cells 4 and 5 our ui_wd_customize.xml override adds.
 --
 -- WD's d_promin.has_module() drives detection and WD persists the installed set, so no save
--- state here. WD's install_module consumes the item and does NOT evict a same-bay occupant,
--- so we install through install()/get_menu_text below, which evict the bay first.
+-- state here. Items install through WD's own install_module, which evicts the bay's occupant.
 
--- conn bay: antenna is the AR identification link. No `pages` -- the AR path shows on
--- entities, not on the Promin.
+-- No `pages`: the AR path shows on entities, not on the Promin.
 local ANTENNA = { name = "ii_ant", section = "ii_wd_antenna", bay = "conn" }
 
--- OSD scanner tiers live in their OWN bay (ii_osd), added below -- so they no longer share
--- the conn bay with the antenna and both can be installed at once. They carry the
--- IDENTIFICATION page (`pages = {"ident"}`): WD's get_available_pages() adds an installed
--- module's pages to the Promin tab cycle, so installing an OSD scanner makes the tab appear.
-local OSD_BAY = "ii_osd"
+-- `pages = {"ident"}`: WD's get_available_pages() adds an installed module's pages to the
+-- Promin's number keys, so installing an OSD scanner adds the IDENTIFICATION page.
 local OSD_SCANNER = {
-	{ name = "ii_osd_t1", section = "ii_wd_osd_scanner_t1", bay = OSD_BAY, pages = { "ident" } },
-	{ name = "ii_osd_t2", section = "ii_wd_osd_scanner_t2", bay = OSD_BAY, pages = { "ident" } },
-	{ name = "ii_osd_t3", section = "ii_wd_osd_scanner_t3", bay = OSD_BAY, pages = { "ident" } },
+	{ name = "ii_osd_t1", section = "ii_wd_osd_scanner_t1", bay = "ii_osd", pages = { "ident" } },
+	{ name = "ii_osd_t2", section = "ii_wd_osd_scanner_t2", bay = "ii_osd", pages = { "ident" } },
+	{ name = "ii_osd_t3", section = "ii_wd_osd_scanner_t3", bay = "ii_osd", pages = { "ident" } },
 }
--- Reuse WD's spare null mesh for the new bay's empty-slot 3D placeholder (visual only).
-local OSD_BAY_NULL = "wd\\promin\\promin_t2_m_null"
 
 local PROCESS = {
-	{ name = "ii_proc_t1", section = "ii_wd_process_t1", bay = "side" },
-	{ name = "ii_proc_t2", section = "ii_wd_process_t2", bay = "side" },
-	{ name = "ii_proc_t3", section = "ii_wd_process_t3", bay = "side" },
+	{ name = "ii_proc_t1", section = "ii_wd_process_t1", bay = "ii_proc" },
+	{ name = "ii_proc_t2", section = "ii_wd_process_t2", bay = "ii_proc" },
+	{ name = "ii_proc_t3", section = "ii_wd_process_t3", bay = "ii_proc" },
 }
+
+-- WD attaches each active bay's empty-slot mesh to the Promin; reuse its spare null mesh.
+local OWN_BAYS = {
+	{ id = "ii_osd", null_model = "wd\\promin\\promin_t2_m_null" },
+	{ id = "ii_proc", null_model = "wd\\promin\\promin_t2_m_null" },
+}
+-- Active on every Promin tier, so the kit works on a tier-1 Promin too (WD grants conn on tier 2 only).
+local KIT_BAYS = { "conn", "ii_osd", "ii_proc" }
 
 local done = false
 
-local function remove_wd_module(modules, name)
-	for i = #modules, 1, -1 do
-		if modules[i].name == name then
-			table.remove(modules, i)
+local function contains(list, value)
+	for _, item in ipairs(list) do
+		if item == value then
+			return true
 		end
 	end
+	return false
 end
 
 local function ensure_module(modules, m)
@@ -55,30 +55,27 @@ local function ensure_module(modules, m)
 	modules[#modules + 1] = m
 end
 
+local function ensure_bay(bays, bay)
+	for _, b in ipairs(bays) do
+		if b.id == bay.id then
+			return
+		end
+	end
+	bays[#bays + 1] = bay
+end
+
 function register()
 	if done then
 		return
 	end
 	local cfg = rawget(_G, "d_promin_config")
-	if not (cfg and cfg.MODULES and cfg.TIERS) then
+	if not (cfg and cfg.MODULES and cfg.BAYS and cfg.TIERS) then
 		return -- WD absent / unexpected shape: stay inert
 	end
 	done = true
 
-	-- Repurpose WD's two empty bays for antenna/process, and ADD a dedicated 4th bay for the
-	-- OSD scanner (ii_osd). The 4th bay needs the ui_wd_customize.xml override we ship (a 4th
-	-- module cell), or WD's customize screen crashes on module_open_4.
-	remove_wd_module(cfg.MODULES, "conn")
-	remove_wd_module(cfg.MODULES, "side")
-	local has_osd_bay = false
-	for _, b in ipairs(cfg.BAYS) do
-		if b.id == OSD_BAY then
-			has_osd_bay = true
-			break
-		end
-	end
-	if not has_osd_bay then
-		cfg.BAYS[#cfg.BAYS + 1] = { id = OSD_BAY, null_model = OSD_BAY_NULL }
+	for _, bay in ipairs(OWN_BAYS) do
+		ensure_bay(cfg.BAYS, bay)
 	end
 	ensure_module(cfg.MODULES, ANTENNA)
 	for _, m in ipairs(OSD_SCANNER) do
@@ -88,48 +85,14 @@ function register()
 		ensure_module(cfg.MODULES, m)
 	end
 
-	-- Make our three bays active on EVERY Promin tier so the kit works on a tier-1 Promin too
-	-- (WD only grants conn/side on tier 2).
 	for _, tier in ipairs(cfg.TIERS) do
 		tier.bays = tier.bays or {}
-		for _, bay in ipairs({ "conn", "side", OSD_BAY }) do
-			local present = false
-			for _, id in ipairs(tier.bays) do
-				if id == bay then
-					present = true
-					break
-				end
-			end
-			if not present then
+		for _, bay in ipairs(KIT_BAYS) do
+			if not contains(tier.bays, bay) then
 				tier.bays[#tier.bays + 1] = bay
 			end
 		end
 	end
-end
-
--- use1_action_functor for ALL our module items: install this module, first evicting any
--- module already occupying its bay (WD's install_module appends without checking, so the
--- conn bay could otherwise hold both an antenna and an OSD scanner, and the side bay could
--- stack all three process tiers). The evicted module's item is returned to inventory by WD.
-function install(obj)
-	local dp = rawget(_G, "d_promin")
-	local cfg = rawget(_G, "d_promin_config")
-	if not (dp and cfg and obj and dp.get_installed_modules and dp.remove_module_at and dp.install_module) then
-		return
-	end
-	local module = cfg.get_module_of_section and cfg.get_module_of_section(obj:section())
-	if not module then
-		return
-	end
-	-- Evict same-bay occupants (iterate high->low; remove_module_at shifts indices).
-	local names = dp.get_installed_modules()
-	for i = #names, 1, -1 do
-		local m = cfg.get_module and cfg.get_module(names[i])
-		if m and m.bay == module.bay then
-			dp.remove_module_at(i)
-		end
-	end
-	dp.install_module(obj)
 end
 
 -- ---- Driver accessors (via WD's own installed-module state) ----------------------

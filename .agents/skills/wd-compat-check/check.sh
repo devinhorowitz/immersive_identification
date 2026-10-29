@@ -7,7 +7,7 @@ set -uo pipefail
 II_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 WD_ROOT="${1:-$HOME/code/lua/st-wearable-devices}"
 COMPAT="$II_ROOT/WD Compatibility/gamedata"
-MARKER_FILE="$COMPAT/scripts/d_promin_ui.script"
+MARKER_FILE="$COMPAT/configs/ui/ui_wd_customize.xml"
 problems=0
 
 say() { printf '\n## %s\n' "$*"; }
@@ -59,7 +59,8 @@ done < <(find "$COMPAT" -type f -print0)
 
 say "WD symbols referenced by compat + base-mod scripts"
 scripts=("$COMPAT"/scripts/*.script "$II_ROOT"/gamedata/scripts/*.script)
-defined() { grep -qE "^[[:space:]]*(local[[:space:]]+)?function[[:space:]]+$2\b|^$2[[:space:]]*=" "$WD_ROOT/gamedata/scripts/$1.script"; }
+# A class (`class("UIPromin")(CUIScriptWnd)`) counts too: ii_wd_promin hooks d_promin_ui.UIPromin.
+defined() { grep -qE "^[[:space:]]*(local[[:space:]]+)?function[[:space:]]+$2\b|^$2[[:space:]]*=|^class[[:space:]]*\(?[[:space:]]*\"$2\"" "$WD_ROOT/gamedata/scripts/$1.script"; }
 check_ref() {
 	local mod="$1" sym="$2"
 	[ -f "$WD_ROOT/gamedata/scripts/$mod.script" ] || return 0

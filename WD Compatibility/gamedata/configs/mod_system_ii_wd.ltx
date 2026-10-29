@@ -7,14 +7,13 @@
 ;
 ; Two item families:
 ;   - Promin MODULES (antenna, OSD scanner t1..t3, process t1..t3): install into the Promin
-;     via WD's Promin system, shown in the bracer customize UI. They repurpose WD's `conn`
-;     and `side` bays (no new bays -- a 4th crashes WD's customize UI). conn holds the
-;     antenna OR an OSD scanner (mutually exclusive = the AR-vs-OSD channel switch); side
-;     holds a process tier. See ii_wd_modules.script.
+;     via WD's Promin system, shown in the bracer customize UI. The antenna takes WD's empty
+;     `conn` bay; OSD scanners and process tiers get bays of their own (ii_osd, ii_proc).
+;     See ii_wd_modules.script.
 ;   - AR SCANNER (t1..t3): a worn device mounted on the bracer, toggled via our
 ;     d_ii_scanner device script (mirrors WD's d_bracer / d_vektor pattern).
 
-; ---- Promin modules (install via our own action) --------------------------------
+; ---- Promin modules ----------------------------------------------------------------
 
 [ii_wd_module_base]:identity_immunities
 GroupControlSection  = spawn_group
@@ -31,12 +30,10 @@ inv_grid_height = 1
 inv_grid_x      = 0
 inv_grid_y      = 0
 cost            = 4000
-; Install via WD's Promin system (so they show + install in the bracer customize UI).
-; Menu text = WD's get_module_menu_text; install goes through our ii_wd_modules.install,
-; which evicts any module already in the target bay first (WD's install_module appends
-; without checking, so the shared conn/side bays would otherwise stack modules).
+; Install via WD's Promin system, like WD's own modules (its install_module swaps out
+; whatever module the bay already holds).
 use1_functor = d_promin.get_module_menu_text
-use1_action_functor = ii_wd_modules.install
+use1_action_functor = d_promin.install_module
 
 [ii_wd_antenna]:ii_wd_module_base
 inv_name        = st_ii_wd_antenna

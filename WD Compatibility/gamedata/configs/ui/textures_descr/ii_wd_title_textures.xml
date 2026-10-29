@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<w>
+	<!-- Title of the Promin IDENTIFICATION page, drawn like WD's own page titles: the glyphs of
+	     WD's JetBrains Mono atlas (wd\ui\fonts\jetbrains_mono), 35 px tall, in WD's text grey. -->
+	<file name="ii_wd\ui\ii_wd_title_ident">
+		<texture id="ii_wd_title_ident" x="0" y="0" width="252" height="35" />
+	</file>
+</w>

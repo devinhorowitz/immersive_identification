@@ -1,0 +1,132 @@
+-- Puts Immersive Identification on WD's Promin screen without replacing a WD file:
+--   * the IDENTIFICATION page: d_promin_ui keeps its page builders in a file local with no
+--     registration call, so the page is added to that table through the upvalues of
+--     UIPromin.ensure_page (the only function holding it);
+--   * the identification cards: driven from UIPromin's own Update and repaint.
+-- If WD reshapes d_promin_ui, register() logs once and leaves the Promin alone.
+
+local IDENT_PAGE = "ident"
+local CARD_PAGES = {
+	[d_promin_config.COMMS_PAGE] = true,
+	[d_promin_config.HEALTH_PAGE] = true,
+	[d_promin_config.MAP_PAGE] = true,
+}
+
+-- The card stack and what it was built for; a stale stack is rebuilt (see d_ii_promin_notify).
+local cards = { stack = nil, theme = nil, scale = nil, pages = nil, failed = false }
+local hooked = false
+
+-- WD's emblem texture for a community, or nil (faction hidden, or WD has no emblem for it).
+function emblem_id(comm)
+	if not comm or comm == "none" or comm == "auto" then
+		return nil
+	end
+	for _, emblem in ipairs(d_promin_config.EMBLEMS) do
+		if emblem.name == comm then
+			return d_promin_chrome_ui.get_emblem_id(comm)
+		end
+	end
+	return nil
+end
+
+local function find_upvalue(fn, wanted)
+	for index = 1, 255 do
+		local name, value = debug.getupvalue(fn, index)
+		if name == nil then
+			return nil
+		end
+		if name == wanted then
+			return value
+		end
+	end
+	return nil
+end
+
+local function report(what, err)
+	printf("! Immersive Identification: %s: %s", what, tostring(err))
+end
+
+-- WD calls the page from its own window callbacks, where a Lua error is fatal: a failing page
+-- reports once and goes quiet instead.
+local function build_ident(ctx)
+	local ok, page = pcall(d_ii_promin_ident.build, ctx)
+	if not ok then
+		report("the IDENTIFICATION page failed to build", page)
+		return nil
+	end
+	for _, name in ipairs({ "set_visible", "update", "repaint" }) do
+		local fn = page[name]
+		page[name] = function(...)
+			local fine, err = pcall(fn, ...)
+			if not fine then
+				report("the IDENTIFICATION page stopped", err)
+				page[name] = function() end
+			end
+		end
+	end
+	return page
+end
+
+local function count_pages(pages)
+	local count = 0
+	for page_id in pairs(pages) do
+		if page_id ~= IDENT_PAGE then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+local function update_cards(wnd)
+	local theme, pages = wnd.theme, wnd.pages
+	if not (theme and pages) then
+		return
+	end
+	local scale = d_ii_promin_notify.get_scale()
+	local built = count_pages(pages)
+	if cards.theme ~= theme or cards.scale ~= scale or cards.pages ~= built then
+		if cards.stack then
+			cards.stack.destroy()
+		end
+		cards.stack = d_ii_promin_notify.build(wnd, theme, scale) or false
+		cards.theme, cards.scale, cards.pages = theme, scale, built
+	end
+	if cards.stack then
+		cards.stack.update(wnd.powered_state and CARD_PAGES[d_promin_ui.get_page()] == true)
+	end
+end
+
+function register()
+	if hooked then
+		return
+	end
+	local cls = d_promin_ui and d_promin_ui.UIPromin
+	local ensure = cls and cls.ensure_page
+	local builders = type(ensure) == "function" and find_upvalue(ensure, "THEME_BUILDERS")
+	if type(builders) ~= "table" then
+		printf("! Immersive Identification: no page table in WD's d_promin_ui, Promin page and cards off")
+		return
+	end
+	hooked = true
+	for _, theme_builders in pairs(builders) do
+		theme_builders[IDENT_PAGE] = build_ident
+	end
+	local update, repaint = cls.Update, cls.repaint
+	cls.Update = function(self)
+		update(self)
+		if cards.failed then
+			return
+		end
+		local ok, err = pcall(update_cards, self)
+		if not ok then
+			cards.failed = true
+			report("identification cards off", err)
+		end
+	end
+	cls.repaint = function(self)
+		repaint(self)
+		if cards.stack and not cards.failed then
+			pcall(cards.stack.repaint)
+		end
+	end
+end

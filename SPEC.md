@@ -941,7 +941,7 @@ in sync with `MCM_PAGES` in `ii_identify.script` and with `presets_ii.ltx`.
 | **Wearable Devices** (page `wdcompat`; only bites when the WD compat add-on is installed, §7.4; the page is hidden otherwise) | | | | |
 | `wd_ignore` | check | false | — | master toggle: bypass the WD compat entirely (identify as if WD isn't installed); disables the rest of this page |
 | `wd_require_kit` | check | true | — | block identification entirely unless the full scanner kit is worn/assembled |
-| `wd_notify_scale` | track | 1.0 | 0.5, 2, 0.05, 2 | Promin BIOMONITOR/NAVIGATION identification-card scale; applies live to the full layout |
+| `wd_notify_scale` | track | 1.0 | 0.5, 2, 0.05, 2 | Promin identification-card scale (COMMUNICATIONS, BIOMONITOR and NAVIGATION pages); applies live to the full layout |
 | `wd_proc_t1/t2/t3` | track | 1.5 / 1.0 / 0.5 | 0.1, 5, 0.1, 1 | process-module tier base scan time (s) |
 | `wd_penalty_t1/t2/t3` | track | 1.0 / 0.75 / 0.5 | 0, 2, 0.05, 2 | process-tier share of every enabled penalty's slowdown above 1× |
 | `wd_scan_t1/t2/t3` | track | 10 / 20 / 30 | 5, 100, 5 | scanner tier identify range (m) |
@@ -1120,24 +1120,21 @@ faction/distance/relationship/rank/weapon display gates remain tier-driven. The 
 
 **New items** (all placeholder art — see the component `README`):
 - **Promin modules** — antenna, **OSD Scanner Module T1/T2/T3**, and process T1/T2/T3 —
-  real WD Promin bay-modules, installed via WD's own system (item use menu / bracer
-  customize screen), so they appear in the customize cells with their icons.
-  `ii_wd_modules.register()` **repurposes WD's two functionally-empty bays** (drops WD's
-  do-nothing `conn`/`side` `MODULES` entries) **and adds a fourth bay** so all four modules
-  fit at once:
-  - `conn` bay: the **antenna**.
-  - `side` bay: a **process** tier.
+  real WD Promin bay-modules, installed via WD's own system (item use menu / bracer customize
+  screen, `d_promin.install_module`, which swaps out the bay's occupant), so they appear in the
+  customize cells with their icons. `ii_wd_modules.register()` leaves WD's `MODULES` as they are
+  and **adds two bays of its own** (WD 0.9's `side` bay holds WD's environmental modules):
+  - `conn` bay (WD's, still a do-nothing placeholder in WD 0.9): the **antenna**.
   - `ii_osd` bay (added to `d_promin_config.BAYS`): an **OSD scanner** tier.
-  - (`map` bay: WD's own navigation module.)
+  - `ii_proc` bay (added): a **process** tier.
+  - (`map` and `side`: WD's navigation and environmental modules.)
 
-  The 4th bay requires a shipped **override of WD's `ui_wd_customize.xml`** (a 4th
-  `module_open_4`/`module_restricted_4`/`cell_4`) — WD's customize screen builds one cell per
-  `d_promin_config.BAYS` entry and ships XML for only three, so a 4th bay is otherwise a fatal
-  `module_open_4 not found`. All install through `ii_wd_modules.install`, which evicts any
-  module already in the target bay first (WD's `install_module` appends without checking).
-  All three of our bays are made active on every Promin tier so the kit works on a tier-1
-  Promin. WD persists the installed set; detection is
-  `d_promin.has_module("ii_ant"/"ii_osd_tN"/"ii_proc_tN")`.
+  The two extra bays require a shipped **override of WD's `ui_wd_customize.xml`** (cells 4 and 5,
+  `module_open_4/5`, `module_restricted_4/5`, `cell_4/5`, side by side under WD's module column)
+  — WD's customize screen builds one cell per `d_promin_config.BAYS` entry and ships XML for only
+  three, so a missing cell is a fatal `module_open_4 not found`. `conn`, `ii_osd` and `ii_proc` are
+  made active on every Promin tier so the kit works on a tier-1 Promin. WD persists the installed
+  set by module name; detection is `d_promin.has_module("ii_ant"/"ii_osd_tN"/"ii_proc_tN")`.
 - **AR Scanner T1/T2/T3** — a **worn** bracer device (`d_ii_scanner.script`, mirroring WD's
   `d_vektor`/`d_bracer`: `wd_worn` + `wd_slots.register_device` + `wd_exo`), 3 tiers
   (range/ADS/mag/night). Shows identification on entities (the usual tags). Attaches **no
@@ -1175,44 +1172,44 @@ script, but `actor_on_first_update` is a callback that must be wired via
 `RegisterScriptCallback` — an early version defined it as a bare global, so its body never
 ran. All wiring now happens in `on_game_start`.
 
-**Promin IDENTIFICATION tab**: installing an **OSD scanner** module adds a third Promin
-screen page (`pages = {"ident"}` on the OSD scanner modules → WD's `get_available_pages`
-puts it in the tab cycle). It mirrors the NAVIGATION page — reuses `d_promin_health_ui.build_chrome`
-(bg `ii_wd_tab_bg_ident`) + `build_bio` to keep the frame + left biomonitor, and draws the
-last-identified target in the **right panel** (the map's region, design rect
-`572,85,425,450`): a **portrait** (`obj:character_icon()`) + name/faction/rank/position/
-distance/weapon (locked fields `---`) + a **scanning spinner**
-(`ii_wd_spinner.dds`, frame-cycled) shown over the portrait while a scan is in progress
-(driven by `ii_identify.get_scan_progress()`). The **IDENTIFICATION tab is a real baked tab**:
-the strip (IDENTIFICATION / BIOMONITOR / NAVIGATION, active one highlighted) is baked into
-the page background art — the ident page has its own `tablet_ui_main_ident.dds`, and WD's
-biomonitor + navigation backgrounds (`tablet_ui_main.dds`, `tablet_ui_main_map.dds`) are
-**overridden** so the third tab shows on every page (DXT5, matching WD's format). Data comes
-from `ii_identify.get_last_identified()` (a persistent snapshot written at scan *completion*
-in the render loop, respecting the tier feature gates, so the readout honours scan time). The Promin CRT
-screen has **no font** (WD renders numbers as pre-baked digit textures), so this ships a
-**monospace glyph atlas** (`ii_wd_font.dds` + a `textures_descr` mapping one id per ASCII
-code) + a compositor (`ii_wd_text.script`) that draws strings by binding per-character
-glyph textures onto slot widgets — the same mechanism as WD's clock. WD's page-builder
-table is a file-local with no seam, so the page needs a **VFS override of
-`d_promin_ui.script`** (verbatim copy + marked `II-COMPAT` additions: the `ident` page
-builder, a second `ctx.init_ii` for our own node xml, and the notification overlay below) —
-re-sync on a WD update.
+**Promin IDENTIFICATION page**: installing an **OSD scanner** module adds the `ident` page
+(`pages = {"ident"}` on the OSD scanner modules → WD's `get_available_pages` appends it after
+WD's own pages, so it is number key 3, or 4 with WD's map module; WD's header draws keys 1-3 only).
+`d_ii_promin_ident` builds it like WD 0.9's own pages: WD's chrome (`d_promin_chrome_ui.build`:
+frame, title, clock, battery, page keys) over WD's comms background, with a title texture made
+from WD's JetBrains Mono atlas (`ii_wd_title_ident.dds`), and every widget from the chrome's
+`wd_panel` kit — so it takes WD's font, palette, brightness and the Default Large theme (both
+themes have a layout). The box shows the last-identified target: a **portrait** plate
+(`obj:character_icon()` through WD's map shader), name, faction with WD's emblem for the
+community, rank, then rows for distance (live), position and weapon, and a **scan bar** with the
+percentage while a scan runs (`ii_identify.get_scan_progress()`). Faction and rank lines stay
+hidden until the process tier unlocks them; locked rows read `-`; before the first identification
+the box reads NO CONTACT. The sidebar is the scanner kit: process / OSD scanner / antenna / AR
+scanner tiers and the identify range the driver currently allows. Data comes from
+`ii_identify.get_last_identified()` (a persistent snapshot written at scan *completion* in the
+render loop, respecting the tier feature gates, so the readout honours scan time; its `comm` field
+is set only while the faction is shown), refreshed when the id changes and every 500 ms.
 
-**Identification notifications**: when a target is identified while the player is on the
-BIOMONITOR or NAVIGATION page (not the ident page, where it's already shown), a card pops up
-bottom-right and stacks upward (`d_ii_promin_notify.script`): faction emblem, name +
-distance, and the rank as a level ("Rank 1".."Rank 8", `ii_identify.RANK_LEVEL`). Cards
-expire after a few seconds. `wd_notify_scale` (0.5–2.0, default 1.0) resizes the card, emblem,
-glyphs, and stack spacing together and applies live. The `d_promin_ui` override eager-builds the
-biomonitor/navigation pages before the overlay so it draws on top; the card art is
-`ii_wd_notif_card.dds`.
+**Registration** (`ii_wd_promin.script`): WD keeps its page builders in `d_promin_ui`'s
+file-local `THEME_BUILDERS` with no registration call, so `register()` reaches that table
+through the upvalues of `UIPromin.ensure_page` and adds `ident` to every theme; no WD file is
+replaced. If WD reshapes `d_promin_ui`, it logs one line and leaves the Promin alone.
 
-**Untestable / placeholder** (flagged in the component `README`): the scanner is invisible
-(no worn model — re-enable + tune the attach in `sync_attachment` for real art); the
-scanner/module icons are generated placeholders; the IDENTIFICATION page's screen layout
-(coordinates in the 1100×600 design space) and glyph sizing are best-guess and will likely
-need in-game tuning. None affects the tier **logic**.
+**Identification notifications**: when a target is identified while the Promin shows the
+COMMUNICATIONS, BIOMONITOR or NAVIGATION page (not the ident page, where it's already shown), a
+card pops up bottom-right and stacks upward (`d_ii_promin_notify.script`): a WD panel box with
+the faction emblem, name and distance, then faction · rank. Cards expire after a few seconds.
+`wd_notify_scale` (0.5–2.0, default 1.0) sizes the cards. The stack hangs off one root static on
+the Promin window and is driven from wrapped `UIPromin.Update`/`repaint`; children draw in attach
+order, so `ii_wd_promin` destroys the stack and builds a new one whenever WD builds another page,
+switches theme, or the scale changes.
+
+**In-game status** (WD 0.9.2, 2026-10-29): checked on a save with the full kit (OSD scanner,
+process and antenna installed, AR scanner worn): the modules survive the load, the customize
+screen shows cells 4 and 5, the ident page renders in both themes, and an identification
+drives the scan bar, the readout and (default theme) a card. Still placeholder: the scanner is
+invisible (no worn model — re-enable + tune the attach in `sync_attachment` for real art) and the
+scanner/module icons are generated. None affects the tier **logic**.
 
 **Identification audio.** The Audio page's `audio_volume` slider applies 0–200% gain to every
 cue after `sound_object:play()` creates its feedback (`sound_object.volume` is a writable engine

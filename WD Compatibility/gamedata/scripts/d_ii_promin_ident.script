@@ -1,184 +1,371 @@
--- Promin IDENTIFICATION page. Mirrors WD's NAVIGATION page layout: keep the chrome
--- (frame/clock/battery) and the left biomonitor, and put our content in the RIGHT panel
--- where the map normally is. Text is drawn with the glyph compositor (ii_wd_text) since the
--- CRT screen has no font; the target portrait is the NPC's character_icon.
---
--- All coordinates are design pixels in the shared 1100x600 space (d_promin_health_ui
--- .get_px()), so they map onto the 3D screen like WD's own pages. The right-panel rect
--- (VIEW) matches the map's region. NOTE: these layout constants are best-guess and will
--- likely need in-game tuning -- they're all gathered here at the top for that reason.
+-- Promin IDENTIFICATION page, built like WD's own pages: WD's chrome (title, clock, battery,
+-- page keys) over WD's comms background, and every widget from the chrome's panel kit, so the
+-- page takes WD's font, palette, brightness and its Default Large theme.
+--   box:     the last identified target -- portrait plate, name, faction, rank, then distance,
+--            position, weapon and the scan in progress.
+--   sidebar: the scanner kit -- process / OSD / antenna / AR scanner and the scan range.
+-- Coordinates are design px in WD's 1100x600 screen space (d_promin_config.get_px()).
 
--- CRT-shader binder (matches how WD draws the bg/digits/map).
-local binder = wd_screen.new_binder(d_promin_config.SCREEN_SHADER)
+local px = d_promin_config.get_px()
+local map_binder = wd_screen.new_binder(d_promin_config.MAP_SHADER)
+local set_shown = wd_screen.set_shown
+local place_widget = wd_screen.place_widget
+local get_upper = wd_text.get_upper
 
--- Our own full-screen background: a copy of WD's map-page bg (biomonitor left + empty right
--- panel) with the tab strip re-baked to show IDENTIFICATION (active) next to a dimmed
--- BIOMONITOR / NAVIGATION. So the IDENTIFICATION tab is a real baked tab, not a drawn label.
--- (Ships as ii_wd\ui\tablet_ui_main_ident.dds; does not override WD's own textures.)
-local BG_TEXTURE = "ii_wd_tab_bg_ident"
-
-local COL_TITLE = { 235, 205, 110 } -- amber (matches our description headers)
-local COL_LABEL = { 110, 175, 150 } -- dim teal
-local COL_VALUE = { 205, 235, 220 } -- bright readout
-local NONE = "---" -- shown for a field that is locked/unavailable
-
--- The right-panel region (where the map draws), design px.
-local VIEW = { x = 572, y = 85, w = 425, h = 450 }
--- Our dark backing inside the right panel (inset a touch from VIEW).
-local PANEL = { x = 580, y = 96, w = 410, h = 430 }
--- Target portrait (top-centre of the right panel).
-local PORTRAIT = { x = 712, y = 116, w = 146, h = 176 }
--- "Scanning" spinner, centred over the portrait area while a scan is in progress.
-local SPINNER = { x = 737, y = 156, w = 96, h = 96 }
-local SPIN_FRAMES, SPIN_STEP_MS = 12, 75 -- 12 x 75 ms = ~900 ms per rotation
--- Field rows below the portrait: label column, value column, glyph metrics.
-local ROW_Y0, ROW_DY = 306, 34
-local LABEL_X, VALUE_X = 590, 714
-local GW, GH, ADV = 15, 20, 15
-
-local ROWS = {
-	{ label = "NAME", key = "name", vmax = 18 },
-	{ label = "FACTION", key = "faction", vmax = 16 },
-	{ label = "RANK", key = "rank", vmax = 14 },
-	{ label = "POSITION", key = "pos", vmax = 18 },
-	{ label = "DISTANCE", key = "dist", vmax = 10 },
-	{ label = "WEAPON", key = "weap", vmax = 18 },
+local TITLE_TEXTURE = "ii_wd_title_ident"
+-- Live distance and the kit readout; a new target is picked up on the next update.
+local REFRESH_MS = 500
+local NONE = "-"
+local TEXTS = {
+	empty = "NO CONTACT",
+	unknown = "UNKNOWN",
+	kit = "SCANNER KIT",
+	standby = "STANDBY",
+	dist = "%d M",
+	pos = "%d, %d, %d",
+	pct = "%d%%",
+	tier = "T%d",
+	fitted = "FITTED",
 }
 
-local function fmt_value(last, key)
-	if not last then
-		return NONE
+local ROWS = {
+	{ key = "dist", label = "DISTANCE" },
+	{ key = "pos", label = "POSITION" },
+	{ key = "weap", label = "WEAPON" },
+	{ key = "scan", label = "SCAN" },
+}
+local KIT_ROWS = {
+	{ key = "process", label = "PROCESS" },
+	{ key = "osd", label = "OSD SCANNER" },
+	{ key = "antenna", label = "ANTENNA" },
+	{ key = "ar", label = "AR SCANNER" },
+	{ key = "range", label = "RANGE" },
+}
+
+LAYOUTS = {
+	[d_promin_config.DEFAULT_THEME] = {
+		background = "wd_promin_page_comms",
+		box = { x = 76, y = 75, w = 624, h = 500 },
+		plate = { x = 90, y = 89, w = 280, h = 206 },
+		id = {
+			x = 386,
+			w = 300,
+			name_y = 92,
+			name_h = 26,
+			line_y = 132,
+			line_h = 30,
+			text_h = 20,
+			emblem = 22,
+			gap = 8,
+		},
+		rows = { x = 90, value_x = 230, y = 316, w = 596, h = 40, text_h = 20, bar_h = 12, pct_w = 64 },
+		side = { x = 725, y = 75, w = 300, inset = 10, title_h = 15, rule_y = 26, row_y = 34, row_h = 30, text_h = 18 },
+	},
+	[d_promin_config.LARGE_THEME] = {
+		background = "wd_promin_page_comms_large",
+		box = { x = 24, y = 75, w = 726, h = 500 },
+		plate = { x = 38, y = 89, w = 300, h = 220 },
+		id = {
+			x = 354,
+			w = 382,
+			name_y = 92,
+			name_h = 33,
+			line_y = 140,
+			line_h = 38,
+			text_h = 26,
+			emblem = 28,
+			gap = 10,
+		},
+		rows = { x = 38, value_x = 230, y = 330, w = 698, h = 50, text_h = 28, bar_h = 16, pct_w = 88 },
+		side = { x = 775, y = 75, w = 300, inset = 10, title_h = 23, rule_y = 32, row_y = 42, row_h = 38, text_h = 23 },
+	},
+}
+
+local function new_text(kit, chars, width, height, align)
+	return kit.new_text({ chars = chars, width = px.w(width), height = px.h(height), align = align })
+end
+
+local function show_fit(kit, widget, value, width, height, role)
+	widget.show(kit.fit(value, px.w(width), px.h(height)), role)
+end
+
+local function format_tier(tier)
+	return tier and string.format(TEXTS.tier, tier) or NONE
+end
+
+-- The kit readout: device tiers straight from WD's state, and the range the identification
+-- driver currently allows (nil while the kit isn't assembled).
+local function read_kit()
+	local mods = rawget(_G, "ii_wd_modules")
+	local scanner = rawget(_G, "d_ii_scanner")
+	local provider = ii_identify and ii_identify.tier_provider
+	local tier = provider and provider()
+	return {
+		process = format_tier(mods and mods.process_tier()),
+		osd = format_tier(mods and mods.osd_scanner_tier()),
+		antenna = mods and mods.has_antenna() and TEXTS.fitted or NONE,
+		ar = format_tier(scanner and scanner.worn_tier()),
+		range = tier and tier.active and tier.max_dist and string.format(TEXTS.dist, tier.max_dist) or NONE,
+	}
+end
+
+local function format_target(last)
+	return {
+		dist = last.dist and string.format(TEXTS.dist, last.dist) or NONE,
+		pos = last.x and string.format(TEXTS.pos, last.x, last.y, last.z) or NONE,
+		weap = (last.weap and last.weap ~= "") and get_upper(last.weap) or NONE,
+	}
+end
+
+local function build_target(page, kit, layout)
+	local plate, id = layout.plate, layout.id
+	page.plate = kit.new_box()
+	page.plate.place(px.x(plate.x), px.y(plate.y), px.w(plate.w), px.h(plate.h))
+	page.portrait = kit.new_image(wd_screen.FILL_ID, "art", nil, map_binder)
+	place_widget(page.portrait.widget, px.x(plate.x), px.y(plate.y), px.w(plate.w), px.h(plate.h))
+	page.name = new_text(kit, 28, id.w, id.name_h)
+	page.name.place(px.x(id.x), px.y(id.name_y))
+	page.emblem = kit.new_image(wd_screen.FILL_ID, "text")
+	place_widget(
+		page.emblem.widget,
+		px.x(id.x),
+		px.y(id.line_y + (id.text_h - id.emblem) / 2),
+		px.w(id.emblem),
+		px.h(id.emblem)
+	)
+	page.faction = new_text(kit, 24, id.w, id.text_h)
+	page.rank = new_text(kit, 24, id.w, id.text_h)
+	page.rank.place(px.x(id.x), px.y(id.line_y + id.line_h))
+	-- across the box at the plate's height, clear of the readout rows below
+	page.empty = new_text(kit, #TEXTS.empty, layout.box.w, id.text_h, "center")
+	page.empty.place(px.x(layout.box.x), px.y(plate.y + (plate.h - id.text_h) / 2))
+end
+
+local function build_rows(page, kit, layout)
+	local rows = layout.rows
+	local value_w = rows.w - (rows.value_x - rows.x)
+	page.rows = {}
+	for index, spec in ipairs(ROWS) do
+		local top = rows.y + (index - 1) * rows.h
+		local row = { label = new_text(kit, #spec.label, rows.value_x - rows.x, rows.text_h) }
+		row.label.place(px.x(rows.x), px.y(top))
+		row.value = new_text(kit, 32, value_w, rows.text_h)
+		row.value.place(px.x(rows.value_x), px.y(top))
+		page.rows[spec.key] = row
 	end
-	if key == "pos" then
-		return last.x and string.format("%d, %d, %d", last.x, last.y, last.z) or NONE
+	-- The scan row draws a progress bar in its value column, the percentage after it.
+	local scan_top = rows.y + (#ROWS - 1) * rows.h + (rows.text_h - rows.bar_h) / 2
+	local bar_w = value_w - rows.pct_w
+	page.track = kit.new_box({ fill = "track_fill", border = "track_border" })
+	page.track.place(px.x(rows.value_x), px.y(scan_top), px.w(bar_w), px.h(rows.bar_h))
+	page.bar = kit.new_bar({ level = "text", inset = px.h(2) })
+	page.bar.place(px.x(rows.value_x), px.y(scan_top), px.w(bar_w), px.h(rows.bar_h))
+	page.pct = new_text(kit, 4, rows.pct_w, rows.text_h, "right")
+	page.pct.place(px.x(rows.value_x + bar_w), px.y(rows.y + (#ROWS - 1) * rows.h))
+end
+
+local function build_kit_panel(page, kit, layout)
+	local side = layout.side
+	local inner_w = side.w - 2 * side.inset
+	local half = inner_w / 2
+	page.kit_title = new_text(kit, #TEXTS.kit, inner_w, side.title_h)
+	page.kit_title.place(px.x(side.x + side.inset), px.y(side.y + 6))
+	page.kit_rule = kit.new_soft_fill("border", wd_panel.SOFT_FILLS.line_h)
+	wd_panel.place_soft_fill(
+		page.kit_rule,
+		px.x(side.x + side.inset),
+		px.y(side.y + side.rule_y),
+		px.w(inner_w),
+		px.h(1.5)
+	)
+	page.kit_rows = {}
+	for index, spec in ipairs(KIT_ROWS) do
+		local top = side.y + side.row_y + (index - 1) * side.row_h
+		local row = { label = new_text(kit, #spec.label, half, side.text_h) }
+		row.label.place(px.x(side.x + side.inset), px.y(top))
+		row.value = new_text(kit, 10, half, side.text_h, "right")
+		row.value.place(px.x(side.x + side.inset + half), px.y(top))
+		page.kit_rows[spec.key] = row
 	end
-	if key == "dist" then
-		return last.dist and string.format("%d m", last.dist) or NONE
-	end
-	local v = last[key]
-	return (v and v ~= "") and v or NONE
+end
+
+local function new_bare_page(chrome)
+	return { chrome = chrome, set_visible = chrome.set_visible, update = chrome.update, repaint = chrome.repaint }
 end
 
 function build(ctx)
-	local px = d_promin_health_ui.get_px()
-	local page = { visible = false }
-
-	-- Chrome (frame/clock/battery/emblem) + the left biomonitor, exactly as the NAVIGATION
-	-- page composes them -- so this page keeps the familiar left half of the screen.
-	page.chrome = d_promin_health_ui.build_chrome({
+	local layout = LAYOUTS[ctx.theme] or LAYOUTS[d_promin_config.DEFAULT_THEME]
+	local chrome = d_promin_chrome_ui.build({
 		init = ctx.init,
-		layout = d_promin_health_ui.get_layout(),
-		bg_tex = BG_TEXTURE,
+		theme = ctx.theme,
+		bg_tex = layout.background,
+		title_tex = TITLE_TEXTURE,
+		wnd = ctx.wnd,
 	})
-	page.bio = d_promin_health_ui.build_bio(ctx)
+	if not chrome.kit then
+		return new_bare_page(chrome)
+	end
+	local kit = chrome.page_kit
+	local page = { chrome = chrome, visible = false }
+	build_target(page, kit, layout)
+	build_rows(page, kit, layout)
+	build_kit_panel(page, kit, layout)
 
-	-- Dark backing over the right panel so our text reads cleanly on any bg.
-	page.panel = ctx.init_ii("ii_wd_panel")
-	binder.set(page.panel, "ii_wd_panel")
-	page.panel:SetWndPos(vector2():set(px.x(PANEL.x), px.y(PANEL.y)))
-	page.panel:SetWndSize(vector2():set(px.w(PANEL.w), px.h(PANEL.h)))
+	local allow_refresh = wd_core.throttle(REFRESH_MS)
+	local shown_id = nil
+	local last = nil
+	-- show_scan runs every frame: touch the widgets only when the scan starts, stops or moves on.
+	local was_scanning = nil
+	local shown_pct = nil
+	local id, rows = layout.id, layout.rows
+	local value_w = rows.w - (rows.value_x - rows.x)
 
-	-- (The IDENTIFICATION tab label is baked into BG_TEXTURE now -- no runtime label needed.)
-
-	-- Portrait (top-right panel). Generic stretch static; texture (re)bound each update.
-	page.portrait = ctx.init_ii("ii_wd_glyph")
-	page.portrait:SetWndPos(vector2():set(px.x(PORTRAIT.x), px.y(PORTRAIT.y)))
-	page.portrait:SetWndSize(vector2():set(px.w(PORTRAIT.w), px.h(PORTRAIT.h)))
-	page.portrait:Show(false)
-	page.portrait_tex = nil
-
-	-- "Scanning" spinner (frame-cycled sprite, over the portrait area while a scan runs).
-	page.spinner = ctx.init_ii("ii_wd_glyph")
-	page.spinner:SetWndPos(vector2():set(px.x(SPINNER.x), px.y(SPINNER.y)))
-	page.spinner:SetWndSize(vector2():set(px.w(SPINNER.w), px.h(SPINNER.h)))
-	page.spinner:Show(false)
-	page.spinner_tex = nil
-
-	page.labels = {}
-	page.values = {}
-	for i, row in ipairs(ROWS) do
-		local y = ROW_Y0 + (i - 1) * ROW_DY
-		page.labels[i] =
-			ii_wd_text.new_field(px, ctx.init_ii, "ii_wd_glyph", #row.label, LABEL_X, y, GW, GH, ADV, COL_LABEL)
-		page.values[i] =
-			ii_wd_text.new_field(px, ctx.init_ii, "ii_wd_glyph", row.vmax, VALUE_X, y, GW, GH, ADV, COL_VALUE)
+	local function hide_target()
+		page.plate.set_visible(false)
+		set_shown(page.portrait, false)
+		set_shown(page.emblem, false)
+		page.name.set_visible(false)
+		page.faction.set_visible(false)
+		page.rank.set_visible(false)
 	end
 
-	local function render()
-		local alpha = d_promin_health_ui.get_ui_alpha()
-		-- This readout is the OSD scanner's display channel: it only shows data while an OSD
-		-- scanner MODULE is installed in the Promin. An AR scanner instead projects overlays
-		-- onto entities (nothing here).
-		local osd = ii_wd_modules and ii_wd_modules.osd_scanner_tier and ii_wd_modules.osd_scanner_tier() ~= nil
-		local last = osd and ii_identify and ii_identify.get_last_identified and ii_identify.get_last_identified()
-			or nil
-		for i, row in ipairs(ROWS) do
-			ii_wd_text.set_text(page.labels[i], row.label, alpha)
-			local v = fmt_value(last, row.key)
-			if not osd and row.key == "name" then
-				v = "install OSD scanner" -- hint: this channel needs the OSD scanner module
-			end
-			ii_wd_text.set_text(page.values[i], v, alpha)
+	local function show_target()
+		if not last then
+			page.empty.show(TEXTS.empty, "mid")
+			hide_target()
+			return
 		end
-		-- While a scan is in progress (OSD channel), show the animated spinner over the
-		-- portrait area instead of the portrait -- the text fields keep the last result until
-		-- the new scan completes.
-		local scanning = osd
-			and ii_identify
-			and ii_identify.get_scan_progress
-			and ii_identify.get_scan_progress() ~= nil
-		if scanning then
-			local frame = math.floor(time_global() / SPIN_STEP_MS) % SPIN_FRAMES
-			page.spinner_tex = binder.bind(page.spinner, "ii_wd_spin_" .. frame, page.spinner_tex)
-			page.spinner:SetTextureColor(GetARGB(alpha, 255, 255, 255))
-			page.spinner:Show(true)
-			page.portrait:Show(false)
+		page.empty.set_visible(false)
+		local portrait = last.portrait
+		page.plate.set_visible(portrait == nil)
+		if portrait then
+			kit.set_image(page.portrait, portrait)
+		end
+		set_shown(page.portrait, portrait ~= nil)
+		show_fit(kit, page.name, get_upper(last.name or TEXTS.unknown), id.w, id.name_h, "text")
+		local emblem = ii_wd_promin.emblem_id(last.comm)
+		if emblem then
+			kit.set_image(page.emblem, emblem)
+		end
+		set_shown(page.emblem, emblem ~= nil)
+		-- Faction and rank stay hidden until the process tier unlocks them, as WD's sender card does.
+		if last.faction then
+			local text_x = id.x + (emblem and id.emblem + id.gap or 0)
+			page.faction.place(px.x(text_x), px.y(id.line_y))
+			show_fit(kit, page.faction, get_upper(last.faction), id.x + id.w - text_x, id.text_h, "text")
 		else
-			page.spinner:Show(false)
-			local pic = last and last.portrait or nil
-			if pic then
-				page.portrait_tex = binder.bind(page.portrait, pic, page.portrait_tex)
-				page.portrait:SetTextureColor(GetARGB(alpha, 255, 255, 255))
-				page.portrait:Show(true)
-			else
-				page.portrait:Show(false)
+			page.faction.set_visible(false)
+		end
+		if last.rank then
+			show_fit(kit, page.rank, get_upper(last.rank), id.w, id.text_h, "text")
+		else
+			page.rank.set_visible(false)
+		end
+	end
+
+	local function show_rows()
+		local values = last and format_target(last)
+		for _, spec in ipairs(ROWS) do
+			local row = page.rows[spec.key]
+			row.label.show(spec.label, "meta")
+			if spec.key ~= "scan" then
+				show_fit(kit, row.value, values and values[spec.key] or NONE, value_w, rows.text_h, "text")
 			end
+		end
+	end
+
+	local function show_scan()
+		local progress = ii_identify and ii_identify.get_scan_progress and ii_identify.get_scan_progress()
+		local scanning = progress ~= nil
+		if scanning ~= was_scanning then
+			was_scanning = scanning
+			shown_pct = nil
+			page.track.set_visible(scanning)
+			page.bar.set_visible(scanning)
+			page.pct.set_visible(scanning)
+			if scanning then
+				page.rows.scan.value.set_visible(false)
+			else
+				page.rows.scan.value.show(TEXTS.standby, "meta")
+			end
+		end
+		if not scanning then
+			return
+		end
+		page.bar.set_ratio(progress)
+		local pct = math.floor(progress * 100)
+		if pct ~= shown_pct then
+			shown_pct = pct
+			page.pct.show(string.format(TEXTS.pct, pct), "text")
+		end
+	end
+
+	local function show_kit()
+		page.kit_title.show(TEXTS.kit, "meta")
+		set_shown(page.kit_rule, true)
+		local values = read_kit()
+		for _, spec in ipairs(KIT_ROWS) do
+			local row = page.kit_rows[spec.key]
+			local value = values[spec.key]
+			row.label.show(spec.label, "meta")
+			row.value.show(value, value == NONE and "dim" or "text")
+		end
+	end
+
+	local function refresh(force)
+		local current = ii_identify and ii_identify.get_last_identified_id and ii_identify.get_last_identified_id()
+		local changed = current ~= shown_id
+		if not (force or changed or allow_refresh()) then
+			return
+		end
+		shown_id = current
+		last = current and ii_identify.get_last_identified() or nil
+		show_target()
+		show_rows()
+		show_kit()
+	end
+
+	local function hide_all()
+		hide_target()
+		page.empty.set_visible(false)
+		for _, row in pairs(page.rows) do
+			row.label.set_visible(false)
+			row.value.set_visible(false)
+		end
+		page.track.set_visible(false)
+		page.bar.set_visible(false)
+		page.pct.set_visible(false)
+		was_scanning = nil
+		page.kit_title.set_visible(false)
+		set_shown(page.kit_rule, false)
+		for _, row in pairs(page.kit_rows) do
+			row.label.set_visible(false)
+			row.value.set_visible(false)
 		end
 	end
 
 	function page.set_visible(visible)
 		page.visible = visible
-		page.chrome.set_visible(visible)
-		page.bio.set_visible(visible)
-		page.panel:Show(visible)
-		if visible then
-			render()
-		else
-			page.portrait:Show(false)
-			page.spinner:Show(false)
-			for i = 1, #ROWS do
-				ii_wd_text.hide_field(page.labels[i])
-				ii_wd_text.hide_field(page.values[i])
-			end
+		chrome.set_visible(visible)
+		if not visible then
+			hide_all()
+			return
 		end
+		refresh(true)
+		show_scan()
 	end
 
 	function page.update()
-		if page.visible then
-			page.chrome.update()
-			page.bio.update()
-			render()
+		chrome.update()
+		if not page.visible then
+			return
 		end
+		refresh(false)
+		show_scan()
 	end
 
-	function page.repaint()
-		if page.visible then
-			page.chrome.repaint()
-			page.bio.repaint()
-			render()
-		end
-	end
+	page.repaint = chrome.repaint
 
-	page.set_visible(false)
+	hide_all()
 	return page
 end

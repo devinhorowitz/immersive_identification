@@ -124,12 +124,17 @@ function on_game_start()
 	if scn and scn.register then
 		pcall(scn.register)
 	end
-	-- Register the identification modules with WD's Promin (repurposes its two empty bays;
-	-- config tables are built at file load, so on_game_start is safe). WD persists the
-	-- installed set itself, so no save/load hooks are needed here.
+	-- Register the identification modules and their bays with WD's Promin (config tables are
+	-- built at file load, so on_game_start is safe). WD persists the installed set itself, so
+	-- no save/load hooks are needed here.
 	local mods = rawget(_G, "ii_wd_modules")
 	if mods and mods.register then
 		pcall(mods.register)
+	end
+	-- The IDENTIFICATION page and the identification cards on the Promin screen.
+	local promin = rawget(_G, "ii_wd_promin")
+	if promin and promin.register then
+		pcall(promin.register)
 	end
 	-- Install the tier provider into Immersive Identification (inert if II absent).
 	local ii = rawget(_G, "ii_identify")

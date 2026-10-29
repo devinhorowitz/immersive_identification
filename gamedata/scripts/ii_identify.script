@@ -267,7 +267,7 @@ function get_last_identified_id()
 end
 
 -- The last target identified this session (or nil if none yet). Returns a fresh table:
--- { name, faction, rank, weap, x, y, z, dist } -- any field may be nil if that data wasn't
+-- { name, faction, comm, rank, weap, x, y, z, dist } -- any field may be nil if that data wasn't
 -- unlocked/available at identify time. `dist` is computed LIVE from the stored position to
 -- the actor (nil if either is unavailable). Global so the WD compat page can read it.
 function get_last_identified()
@@ -283,6 +283,7 @@ function get_last_identified()
 	return {
 		name = _last_id.name,
 		faction = _last_id.faction,
+		comm = _last_id.comm, -- community id, set only while the faction is shown
 		rank = _last_id.rank,
 		weap = _last_id.weap,
 		portrait = _last_id.portrait,
@@ -4444,6 +4445,8 @@ local function render(tg)
 				e.osd_done = true
 				_last_id.id = id
 				_last_id.name, _last_id.faction = e.name, e.header
+				-- Gated like the faction text: the community picks the Promin's emblem.
+				_last_id.comm = e.header and e.comm or nil
 				_last_id.rank, _last_id.weap = e.rank, e.weap
 				_last_id.rank_level = e.rank_level
 				-- Same live pick as the per-entity tag above.

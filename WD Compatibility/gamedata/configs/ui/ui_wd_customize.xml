@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="windows-1251" ?>
 <!-- OVERRIDE of st-wearable-devices' ui_wd_customize.xml. Verbatim copy of WD's file plus a
-     FOURTH module slot (module_open_4 / module_restricted_4 / cont_modules cell_4 + taller
-     container), so the Promin can hold four modules (map + antenna + OSD scanner + process)
-     at once. WD's customize screen builds one cell per Promin bay from d_promin_config.BAYS
-     and only ships XML for three, so a fourth bay without this override is a fatal
-     "module_open_4 not found". If WD updates its own ui_wd_customize.xml, re-sync this copy.
-     WD-SYNCED: 0.8.14 -->
+     FOURTH and FIFTH module slot (module_open_4/5, module_restricted_4/5, cont_modules
+     cell_4/5 + a taller, wider container), for the bays Immersive Identification adds: the
+     OSD scanner (ii_osd) and the process module (ii_proc). WD's customize screen builds one
+     cell per Promin bay from d_promin_config.BAYS and only ships XML for three, so a missing
+     cell is a fatal "module_open_4 not found". Cells 4 and 5 sit side by side under WD's
+     module column. If WD updates its own ui_wd_customize.xml, re-sync this copy.
+     WD-SYNCED: 0.9.2 -->
 <w>
 	<back x="587" y="21" width="427" height="445" stretch="1">
 		<texture>wd_customize_main</texture>
@@ -43,6 +44,9 @@
 	<module_open_4 x="856" y="290" width="38" height="50" stretch="1">
 		<texture>wd_customize_slot_open</texture>
 	</module_open_4>
+	<module_open_5 x="900" y="290" width="38" height="50" stretch="1">
+		<texture>wd_customize_slot_open</texture>
+	</module_open_5>
 
 	<module_restricted_1 x="856" y="94" width="38" height="50" stretch="1">
 		<texture>wd_customize_slot_restricted</texture>
@@ -56,6 +60,9 @@
 	<module_restricted_4 x="856" y="290" width="38" height="50" stretch="1">
 		<texture>wd_customize_slot_restricted</texture>
 	</module_restricted_4>
+	<module_restricted_5 x="900" y="290" width="38" height="50" stretch="1">
+		<texture>wd_customize_slot_restricted</texture>
+	</module_restricted_5>
 
 	<cont_slots x="607" y="94" width="38" height="181">
 		<scroll x="0" y="0" width="38" height="181" stretch="1" right_ident="0" left_ident="0" top_indent="0" bottom_indent="0" vert_interval="0" always_show_scroll="0"/>
@@ -153,9 +160,9 @@
 
 	<cont_devices x="609" y="365" width="382" height="75"/>
 
-	<cont_modules x="856" y="94" width="38" height="247">
-		<scroll x="0" y="0" width="38" height="247" stretch="1" right_ident="0" left_ident="0" top_indent="0" bottom_indent="0" vert_interval="0" always_show_scroll="0"/>
-		<st x="0" y="0" width="38" height="247" stretch="1"/>
+	<cont_modules x="856" y="94" width="82" height="247">
+		<scroll x="0" y="0" width="82" height="247" stretch="1" right_ident="0" left_ident="0" top_indent="0" bottom_indent="0" vert_interval="0" always_show_scroll="0"/>
+		<st x="0" y="0" width="82" height="247" stretch="1"/>
 		<cell stretch="1">
 			<highlight stretch="1">
 				<texture>ui_button_inv_h</texture>
@@ -264,6 +271,27 @@
 				</progress>
 			</bar>
 		</cell_4>
+		<cell_5 x="44" y="197" width="38" height="50" stretch="1">
+			<pic stretch="1" align="c" alignment="c"/>
+			<highlight stretch="1">
+				<texture>ui_button_inv_h</texture>
+			</highlight>
+			<cnt x="-2" y="-1" width="21" height="11" stretch="1">
+				<texture a="200">ui_item_count_back</texture>
+				<text x="0" y="0" width="21" height="11" font="arial_14" color="ui_2" align="c" vert_align="c"/>
+			</cnt>
+			<ctxt stretch="1">
+				<text font="arial_14" color="ui_2" align="l" vert_align="b"/>
+			</ctxt>
+			<bar x="2" y="45" width="34" height="3" horz="1" min="0" max="1" pos="1" stretch="1">
+				<background width="34" height="3" stretch="1">
+					<texture r="62" g="74" b="74">ui_inGame2_inventory_item_status_bar</texture>
+				</background>
+				<progress stretch="1">
+					<texture r="142" g="149" b="149">ui_inGame2_inventory_item_status_bar</texture>
+				</progress>
+			</bar>
+		</cell_5>
 	</cont_modules>
 
 	<btn_gui x="940" y="474" width="32" height="42" stretch="1">
