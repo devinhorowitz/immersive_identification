@@ -7,7 +7,7 @@ set -uo pipefail
 II_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 WD_ROOT="${1:-$HOME/code/lua/st-wearable-devices}"
 COMPAT="$II_ROOT/WD Compatibility/gamedata"
-MARKER_FILE="$COMPAT/configs/ui/ui_wd_customize.xml"
+MARKER_FILE="$II_ROOT/fomod/ModuleConfig.xml"
 problems=0
 
 say() { printf '\n## %s\n' "$*"; }
@@ -31,9 +31,6 @@ if [ -n "$synced" ]; then
 fi
 [ -n "$base" ] || { flag "cannot resolve baseline commit for '${synced}'; falling back to HEAD~1"; base="$(wd rev-parse --short HEAD~1)"; }
 echo "  baseline    : $base"
-for f in "$COMPAT/configs/ui/ui_wd_customize.xml" "$II_ROOT/fomod/ModuleConfig.xml"; do
-	grep -q "WD-SYNCED: $synced" "$f" || flag "${f#"$II_ROOT"/} does not say WD-SYNCED: $synced"
-done
 grep -q "Wearable Devices Compatibility (WD $synced)" "$II_ROOT/fomod/ModuleConfig.xml" ||
 	flag "fomod/ModuleConfig.xml plugin name is not 'Wearable Devices Compatibility (WD $synced)'"
 if [ "$base" != "$(wd rev-parse --short HEAD)" ]; then
@@ -56,6 +53,18 @@ while IFS= read -r -d '' f; do
 	missing="$(diff -wB "$WD_ROOT/gamedata/$rel" "$f" | grep -c '^<')"
 	[ "$missing" -eq 0 ] || echo "       note: $missing upstream line(s) absent/altered in our copy (review: diff -wB \"$WD_ROOT/gamedata/$rel\" \"$f\")"
 done < <(find "$COMPAT" -type f -print0)
+
+say "Customize cells (modxml_ii_wd_customize copies WD's last module cell through DXML)"
+customize_xml="$WD_ROOT/gamedata/configs/ui/ui_wd_customize.xml"
+for node in module_open_3 module_restricted_3 cont_modules cell_3; do
+	grep -q "<$node[ >]" "$customize_xml" || flag "WD's ui_wd_customize.xml has no <$node>, which the DXML cells are copied from"
+done
+grep -q '"module_open_" \.\. index' "$WD_ROOT/gamedata/scripts/wd_customize.script" ||
+	flag "wd_customize.script no longer builds module_open_<i> per bay; recheck modxml_ii_wd_customize"
+if ! wd diff --quiet "$base" HEAD -- gamedata/configs/ui/ui_wd_customize.xml gamedata/scripts/wd_customize.script; then
+	echo "  changed upstream since baseline (read: the cells copy WD's last one):"
+	wd diff --stat "$base" HEAD -- gamedata/configs/ui/ui_wd_customize.xml gamedata/scripts/wd_customize.script | sed 's/^/       /'
+fi
 
 say "WD symbols referenced by compat + base-mod scripts"
 scripts=("$COMPAT"/scripts/*.script "$II_ROOT"/gamedata/scripts/*.script)

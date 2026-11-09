@@ -151,9 +151,9 @@ duplicate bracer on the arm); it's a logical device — worn state + tier only.
   snapshotted once per frame; the driver's WD-state read is cached (~250 ms).
 - **Bays (WD 0.9):** the antenna uses WD's empty `conn` bay; the OSD scanner and process
   module get bays of their own (`ii_osd`, `ii_proc`), since WD 0.9's `side` bay holds its
-  environmental modules. WD's modules are untouched. The extra bays come with customize-screen
-  cells 4 and 5 in our `ui_wd_customize.xml` override (a missing cell is a fatal
-  `module_open_4` XML crash).
+  environmental modules. WD's modules are untouched. The extra bays get customize-screen
+  cells 4 and 5 from `modxml_ii_wd_customize` (DXML), added to WD's XML as it loads (a missing
+  cell is a fatal `module_open_4` XML crash).
 - **Ident page and cards without replacing WD files:** `ii_wd_promin` adds the page to WD's
   file-local page table through `UIPromin.ensure_page`'s upvalues and drives the cards from
   WD's own `UIPromin.Update`; both are built from WD's chrome and panel kit, so they follow
@@ -181,8 +181,9 @@ duplicate bracer on the arm); it's a logical device — worn state + tier only.
 
 ## Status / caveats
 
-Checked in game with WD 0.9.2 on a save carrying the full kit: modules survive loading, the
-customize screen shows cells 4 and 5, the IDENTIFICATION page renders in both WD themes, and an
-identification drives the scan bar, the readout and a notification card. WD is coupled by
-section/table names; a WD update to its device/slot/module/UI internals may require matching
-changes here.
+Checked in game with WD 0.9.4 on a save carrying the full kit: modules survive loading, the
+customize screen opens with cells 4 and 5 (added through DXML), number keys select the pages
+(key 4 reaches IDENTIFICATION with WD's map module in), the IDENTIFICATION page renders in both
+WD themes, and an identification drives the scan bar, the readout and the AR tag; the
+notification card was last checked with WD 0.9.2. WD is coupled by section/table names; a WD
+update to its device/slot/module/UI internals may require matching changes here.

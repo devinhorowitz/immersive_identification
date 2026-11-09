@@ -1129,10 +1129,13 @@ faction/distance/relationship/rank/weapon display gates remain tier-driven. The 
   - `ii_proc` bay (added): a **process** tier.
   - (`map` and `side`: WD's navigation and environmental modules.)
 
-  The two extra bays require a shipped **override of WD's `ui_wd_customize.xml`** (cells 4 and 5,
-  `module_open_4/5`, `module_restricted_4/5`, `cell_4/5`, side by side under WD's module column)
-  — WD's customize screen builds one cell per `d_promin_config.BAYS` entry and ships XML for only
-  three, so a missing cell is a fatal `module_open_4 not found`. `conn`, `ii_osd` and `ii_proc` are
+  WD's customize screen builds one cell per `d_promin_config.BAYS` entry (`module_open_<i>`,
+  `module_restricted_<i>` and `cont_modules`' `cell_<i>`) and its `ui_wd_customize.xml` has three,
+  so a missing cell is a fatal `module_open_4 not found`. `modxml_ii_wd_customize.script` adds the
+  missing ones through **DXML** as the file loads: copies of WD's third cell, side by side in a
+  row under its module column (cells 4 and 5), with `cont_modules` and its scroll view grown to
+  hold them. No WD file is replaced, and the cells follow WD's own if it restyles them. (WD ships
+  a DXML script of its own, so DXML is there wherever WD runs.) `conn`, `ii_osd` and `ii_proc` are
   made active on every Promin tier so the kit works on a tier-1 Promin. WD persists the installed
   set by module name; detection is `d_promin.has_module("ii_ant"/"ii_osd_tN"/"ii_proc_tN")`.
 - **AR Scanner T1/T2/T3** — a **worn** bracer device (`d_ii_scanner.script`, mirroring WD's
@@ -1204,10 +1207,13 @@ the Promin window and is driven from wrapped `UIPromin.Update`/`repaint`; childr
 order, so `ii_wd_promin` destroys the stack and builds a new one whenever WD builds another page,
 switches theme, or the scale changes.
 
-**In-game status** (WD 0.9.2, 2026-10-29): checked on a save with the full kit (OSD scanner,
+**In-game status** (WD 0.9.4, 2026-11-08): checked on a save with the full kit (OSD scanner,
 process and antenna installed, AR scanner worn): the modules survive the load, the customize
-screen shows cells 4 and 5, the ident page renders in both themes, and an identification
-drives the scan bar, the readout and (default theme) a card. Still placeholder: the scanner is
+XML as the engine parses it carries cells 4 and 5 from `modxml_ii_wd_customize` and the
+customize screen opens with them, number keys 1-3 select the pages (key 4 reaches the ident page
+with WD's map module installed), the ident page renders in both themes, and an identification
+drives the scan bar, the readout and the AR tag. The card was last checked with WD 0.9.2
+(2026-10-29). Still placeholder: the scanner is
 invisible (no worn model — re-enable + tune the attach in `sync_attachment` for real art) and the
 scanner/module icons are generated. None affects the tier **logic**.
 

@@ -47,11 +47,11 @@ holds WD's environmental modules, while `conn` still does nothing, so the **ante
 process module. WD's own modules are untouched. All three of our bays work on a tier-1 Promin
 too.
 
-The two extra bays need a shipped **override of WD's `ui_wd_customize.xml`** — WD's customize
-screen builds one cell per bay and only ships XML for three, so an extra bay is otherwise a
-fatal `XML node module_open_4 not found`. Our copy adds cells 4 and 5, side by side under WD's
-module column. (Re-sync it if WD updates that file.) The extra bays render WD's placeholder
-null mesh on the Promin.
+The two extra bays need cells on WD's customize screen, which builds one cell per bay from
+`ui_wd_customize.xml` and has three; an extra bay is otherwise a fatal
+`XML node module_open_4 not found`. `modxml_ii_wd_customize.script` adds cells 4 and 5 through
+**DXML** as WD's file loads, side by side under WD's module column, so no WD file is replaced.
+The extra bays render WD's placeholder null mesh on the Promin.
 
 Because the antenna and OSD scanner sit in separate bays, the **AR and OSD channels are
 independent**: install both (plus a worn AR scanner) to get on-entity overlays *and* the
@@ -99,8 +99,10 @@ This component ships **no bespoke art or models**; the tier *logic* is complete,
 
 ## Checked in game
 
-With WD 0.9.2, on a save carrying the full kit (OSD scanner, process module and antenna
-installed, AR scanner worn): the installed modules survive loading, the customize screen shows
-cells 4 and 5, the IDENTIFICATION page renders in both themes, and an identification drives the
-scan bar, the readout and a notification card. WD is coupled by section/table names — if WD
-updates its device/slot/UI internals, this component may need matching updates.
+With WD 0.9.4, on a save carrying the full kit (OSD scanner, process module and antenna
+installed, AR scanner worn): the installed modules survive loading; the customize XML, as the
+engine reads it, has cells 4 and 5 from DXML, and the customize screen opens with them; number
+keys 1-3 select the pages, and key 4 the IDENTIFICATION page once WD's map module is in; the
+page renders in both themes; and an identification drives the scan bar, the readout and the AR
+tag. The notification card was last checked with WD 0.9.2. WD is coupled by section/table
+names — if WD updates its device/slot/UI internals, this component may need matching updates.

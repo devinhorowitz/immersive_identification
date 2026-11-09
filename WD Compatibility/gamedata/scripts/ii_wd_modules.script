@@ -5,7 +5,7 @@
 -- there. WD's `side` bay now holds its environmental modules, so the PROCESS and OSD SCANNER
 -- modules get bays of their own (ii_proc, ii_osd), appended to WD's three. WD's MODULES are
 -- left as they are. WD's customize screen builds one cell per bay, so the two extra bays need
--- the cells 4 and 5 our ui_wd_customize.xml override adds.
+-- cells 4 and 5, which modxml_ii_wd_customize adds to WD's XML as it loads.
 --
 -- WD's d_promin.has_module() drives detection and WD persists the installed set, so no save
 -- state here. Items install through WD's own install_module, which evicts the bay's occupant.

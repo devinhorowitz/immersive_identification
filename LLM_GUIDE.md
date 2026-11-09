@@ -556,8 +556,8 @@ The base mod is always installed. The optional parts are below.
 - **Skill System: Perception**. Adds a **Perception** skill to the *Skill System* (haru_skills)
   mod. It levels up from identifying (and looting identified corpses) and speeds up scanning.
   Only install it if you have Skill System.
-- **Wearable Devices Compatibility (WD 0.9.2)**. Ties identification to scanner gear from
-  *st-wearable-devices*. Only for WD version 0.9.2; other versions may crash. Details below.
+- **Wearable Devices Compatibility (WD 0.9.4)**. Ties identification to scanner gear from
+  *st-wearable-devices*. Made for WD version 0.9.4; other versions may misbehave. Details below.
 
 **Custom faction patches** (choose at most one). Each also needs **Custom faction patches**
 switched on in UI Style → General.

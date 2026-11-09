@@ -1,0 +1,105 @@
+-- WD's customize screen (wd_customize) asks ui_wd_customize.xml for module_open_<i>,
+-- module_restricted_<i> and cont_modules' cell_<i> for every Promin bay, and a missing node is a
+-- fatal "XML node not found". WD's file has three; the ii_osd and ii_proc bays need two more.
+-- They are added here through DXML as the file loads, so no WD file is replaced: copies of WD's
+-- last cell, set side by side in a row under its module column.
+
+local FILES = {
+	["ui\\ui_wd_customize.xml"] = true,
+	["ui\\ui_wd_customize_16.xml"] = true,
+	["ui\\ui_wd_customize_21.xml"] = true,
+}
+
+local GAP_X = 6
+
+local reported = false
+
+local function first(xml, query)
+	return xml:query(query)[1]
+end
+
+local function num(xml, el, key)
+	return tonumber(xml:getElementAttr(el)[key])
+end
+
+-- DXML nodes are plain tables ({ el, kids, parent }); insertElement sets the copy's parents.
+local function copy_node(node)
+	local copy = { el = node.el }
+	if node.kids then
+		copy.kids = {}
+		for i, kid in ipairs(node.kids) do
+			copy.kids[i] = copy_node(kid)
+		end
+	end
+	return copy
+end
+
+local function add_copy(xml, template, name, x, y)
+	local copy = copy_node(template)
+	local data = xml:getElement(copy)
+	data.name = name
+	data.attr.x = x
+	data.attr.y = y
+	copy.el = xml:convertElement(data).el
+	xml:insertElement(copy, template.parent)
+end
+
+-- Bays the file has a whole cell for: both statics and the container's cell.
+local function cells_in(xml)
+	local n = 0
+	while
+		first(xml, "module_open_" .. (n + 1))
+		and first(xml, "module_restricted_" .. (n + 1))
+		and first(xml, "cont_modules > cell_" .. (n + 1))
+	do
+		n = n + 1
+	end
+	return n
+end
+
+local function add_cells(xml)
+	local have = cells_in(xml)
+	local want = #d_promin_config.BAYS
+	local cont = first(xml, "cont_modules")
+	if want <= have or have < 2 or not cont then
+		return
+	end
+	local open = first(xml, "module_open_" .. have)
+	local restricted = first(xml, "module_restricted_" .. have)
+	local cell = first(xml, "cont_modules > cell_" .. have)
+	local x0, y = num(xml, open, "x"), num(xml, open, "y")
+	y = y + y - num(xml, first(xml, "module_open_" .. (have - 1)), "y")
+	local step = num(xml, open, "width") + GAP_X
+	local cx, cy = num(xml, cont, "x"), num(xml, cont, "y")
+	local width, height = num(xml, cont, "width"), num(xml, cont, "height")
+	for i = have + 1, want do
+		local x = x0 + (i - have - 1) * step
+		add_copy(xml, open, "module_open_" .. i, x, y)
+		add_copy(xml, restricted, "module_restricted_" .. i, x, y)
+		add_copy(xml, cell, "cell_" .. i, x - cx, y - cy)
+		width = math.max(width, x - cx + num(xml, cell, "width"))
+		height = math.max(height, y - cy + num(xml, cell, "height"))
+	end
+	-- The container's scroll view clips cells outside it.
+	for _, query in ipairs({ "cont_modules", "cont_modules > scroll", "cont_modules > st" }) do
+		local el = first(xml, query)
+		if el then
+			xml:setElementAttr(el, { width = width, height = height })
+		end
+	end
+end
+
+function on_xml_read()
+	RegisterScriptCallback("on_xml_read", function(name, xml)
+		if not FILES[name] then
+			return
+		end
+		-- DXML runs each mod's edit in turn and catches nothing, so an error here would skip
+		-- the rest and reach the engine's XML read.
+		local ok, err = pcall(add_cells, xml)
+		if not ok and not reported then
+			reported = true
+			printf("! Immersive Identification: WD customize cells: %s", tostring(err))
+		end
+	end)
+end
